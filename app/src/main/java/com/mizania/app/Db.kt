@@ -543,7 +543,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
         val events = HashMap<Pair<Long, String>, MutableList<Ev>>()
         fun add(key: Pair<Long, String>, e: Ev) { events.getOrPut(key) { ArrayList() } += e }
         readableDatabase.rawQuery(
-            "SELECT id, account_id, acct_no, to_acct, bal_acct, time, amount, income, balance, kind FROM txns " +
+            "SELECT id, account_id, acct_no, to_acct, bal_acct, time, amount, income, balance, kind, body FROM txns " +
                 "WHERE account_id IS NOT NULL AND manual=0", null
         ).use { c ->
             while (c.moveToNext()) {
@@ -557,12 +557,14 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
                 val income = c.getInt(7) == 1
                 val bal = if (c.isNull(8)) null else c.getDouble(8)
                 val kind = c.getString(9) ?: ""
+                // When the SMS says "صادرة" or "واردة", that wins; the balance only decides the rest.
+                val stated = SmsParser.statedDirection(c.getString(10) ?: "") != null
                 if (to.isNotEmpty()) {
                     add(acc to from, Ev(time, id * 2, -amt, if (balAcct == from) bal else null, id, amt, false, false))
                     add(acc to to, Ev(time, id * 2 + 1, amt, if (balAcct == to) bal else null, id, amt, true, false))
                 } else {
                     add(acc to from, Ev(time, id * 2, if (income) amt else -amt, if (balAcct == from) bal else null,
-                        id, amt, income, kind != "راتب" && amt > 0))
+                        id, amt, income, kind != "راتب" && amt > 0 && !stated))
                     if (bal != null && balAcct != from) add(acc to balAcct, Ev(time, id * 2 + 1, 0.0, bal, id, 0.0, false, false))
                 }
             }

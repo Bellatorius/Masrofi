@@ -167,7 +167,7 @@ object Processor {
      */
     fun repairIfNeeded(ctx: Context) {
         val db = Db.get(ctx)
-        val version = "6"
+        val version = "7"
         if (db.setting("repair", "0") == version) return
         val arrived = HashMap<String, Long>()
         if (canReadSms(ctx)) {

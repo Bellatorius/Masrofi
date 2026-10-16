@@ -116,16 +116,14 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
                   ) {
-                    if (locked.value) {
-                        LockScreen(onUnlock = ::authenticate)
-                    } else {
-                        App(
-                            tick = tick.intValue,
-                            refresh = { tick.intValue++ },
-                            openTxn = openTxn.value,
-                            setOpenTxn = { openTxn.value = it },
-                        )
-                    }
+                    // The app stays composed under the lock, so unlocking returns to the same screen.
+                    App(
+                        tick = tick.intValue,
+                        refresh = { tick.intValue++ },
+                        openTxn = openTxn.value,
+                        setOpenTxn = { openTxn.value = it },
+                    )
+                    if (locked.value) LockOverlay(onUnlock = ::authenticate)
                   }
                 }
             }
@@ -345,6 +343,25 @@ fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
                     style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+/**
+ * The lock as its own full-screen window: it covers the app and any open sheet or dialog
+ * (those are windows too), and back can't dismiss it.
+ */
+@Composable
+fun LockOverlay(onUnlock: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = {},
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        LockScreen(onUnlock)
     }
 }
 

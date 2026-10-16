@@ -106,6 +106,20 @@ public final class SmsParser {
         return canonical(first(ACCT, t));
     }
 
+    /**
+     * The direction the SMS states in words: TRUE for "واردة" (money in), FALSE for "صادرة" (money out),
+     * null when it says neither (or both). A stated direction wins over the balance check.
+     */
+    public static Boolean statedDirection(String raw) {
+        if (raw == null) return null;
+        String t = normalize(raw);
+        String lower = t.toLowerCase(Locale.ROOT);
+        boolean in = t.contains("وارد") || lower.contains("incoming");
+        boolean out = t.contains("صادر") || lower.contains("outgoing");
+        if (in == out) return null;
+        return in;
+    }
+
     /** A balance-only notice ("رصيد حسابك ... هو X"): returns {acctNo, balance} or null. */
     public static String[] balanceNotice(String raw) {
         if (raw == null) return null;
@@ -226,6 +240,20 @@ public final class SmsParser {
             } else {
                 r.kind = "حركة";
             }
+        }
+        // "حوالة كليك صادرة / واردة": the stated direction decides, whatever the account wording suggests.
+        Boolean stated = statedDirection(t);
+        if (stated != null && !r.internal && !"راتب".equals(r.kind)
+                && (cliq || t.contains("حوالة") || t.contains("تحويل"))) {
+            boolean in = stated;
+            if (in != r.income) {
+                r.merchant = cutName(in ? group(FROM_NAME, f) : group(TO_NAME, f));
+                if (in && !to.isEmpty()) r.acctNo = to;
+                if (!in && !from.isEmpty()) r.acctNo = from;
+            }
+            r.income = in;
+            if (cliq) r.kind = in ? "كليك وارد" : "كليك";
+            else r.kind = in ? "حوالة واردة" : to.isEmpty() ? "حوالة صادرة" : "حوالة لحساب " + to;
         }
         if (r.balAcct.isEmpty()) r.balAcct = r.acctNo;
         if (r.merchant == null) r.merchant = "";
