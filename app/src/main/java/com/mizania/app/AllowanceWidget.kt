@@ -31,13 +31,16 @@ class AllowanceWidget : AppWidgetProvider() {
             )
             for (id in ids) {
                 val v = RemoteViews(ctx.packageName, R.layout.widget_allowance)
+                v.setTextViewText(R.id.widget_title, tr("المتاح لك اليوم", "You can spend today"))
+                v.setInt(R.id.widget_root, "setLayoutDirection",
+                    if (Lang.ar) android.view.View.LAYOUT_DIRECTION_RTL else android.view.View.LAYOUT_DIRECTION_LTR)
                 if (al != null) {
                     v.setTextViewText(R.id.widget_amount, fmt(max(0.0, al.leftToday)))
                     v.setTextViewText(
                         R.id.widget_sub,
-                        if (al.leftToday < 0) "زدت اليوم بـ ${fmt(-al.leftToday)}"
-                        else al.balance?.let { "رصيدك ${fmt(it)}، باقي ${al.daysLeft} يوم" }
-                            ?: "صرفت اليوم ${fmt(al.spentToday)}، باقي ${al.daysLeft} يوم",
+                        if (al.leftToday < 0) tr("تجاوزت حدك اليوم بمقدار ${fmt(-al.leftToday)}", "${fmt(-al.leftToday)} over today")
+                        else al.balance?.let { tr("رصيدك ${fmt(it)}، متبقٍ ${daysText(al.daysLeft)}", "Balance ${fmt(it)}, ${daysText(al.daysLeft)} left") }
+                            ?: tr("صرفت اليوم ${fmt(al.spentToday)}، متبقٍ ${daysText(al.daysLeft)}", "Spent ${fmt(al.spentToday)} today, ${daysText(al.daysLeft)} left"),
                     )
                     v.setInt(R.id.widget_root, "setBackgroundResource",
                         if (al.leftToday < 0) R.drawable.widget_bg_over else R.drawable.widget_bg)

@@ -126,9 +126,9 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
             IconBadge(if (t.income) "💵" else selected?.icon ?: "❔",
                 if (t.income) Ui.p.mint else selected?.let { Color(it.color) } ?: Ui.p.pomegranate, 48.dp)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(t.merchant.ifEmpty { t.kind }, style = MaterialTheme.typography.titleMedium,
+                Text(t.title, style = MaterialTheme.typography.titleMedium,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(t.kind + "، " + Period.stamp(t.time), style = MaterialTheme.typography.bodySmall,
+                Text(t.kindText + tr("، ", ", ") + Period.stamp(t.time), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (accountName != null) Text(accountName, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -137,20 +137,21 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
                 sign = if (t.income) "+" else "")
         }
         t.balance?.let {
-            Text("الرصيد بعدها ${fmt(it)}", style = MaterialTheme.typography.bodySmall,
+            Text(tr("الرصيد بعدها ${fmt(it)}", "Balance after: ${fmt(it)}"), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         }
 
         if (!t.income) {
-            SheetLabel("لأي بند تابعة؟")
+            SheetLabel(tr("إلى أي بند تتبع؟", "Which budget line?"))
             CategoryChips(cats, cat) { cat = if (cat == it) null else it }
             if (db.isSavings(selected)) {
                 if (goals.isEmpty()) {
-                    Text("ما عندك أهداف ادخار لسا. اعمل هدف من «أموالي ← الادخار» وبتنحسب فيه.",
+                    Text(tr("لا توجد لديك أهداف ادخار بعد. أنشئ هدفاً من «أموالي ← الادخار» ليُحتسب فيه.",
+                        "You have no savings goals yet. Create one in “My money → Savings” and it will count toward it."),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp))
                 } else {
-                    SheetLabel("على أي هدف ادخار؟")
+                    SheetLabel(tr("لأي هدف ادخار؟", "Which savings goal?"))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         goals.forEach { g ->
                             FilterChip(selected = goalSel == g.id, onClick = { goalSel = g.id },
@@ -165,22 +166,23 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = learn, onCheckedChange = { learn = it })
-                    Text("كل حركات «${t.merchant}» تروح لنفس البند تلقائياً", style = MaterialTheme.typography.bodyMedium)
+                    Text(tr("صنّف كل حركات «${t.merchant}» في البند نفسه تلقائياً", "Always put “${t.merchant}” in this line"), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
         val debtLine = !t.income && db.isDebtLine(selected)
         val shownDebts = if (debtLine) debts.filter { !it.owedToMe } else debts
         if (debtLine && shownDebts.isEmpty()) {
-            Text("ما في دين مسجّل عليك. ضيفه من «أموالي ← الديون» وبتنحسب الدفعة سداد عليه.",
+            Text(tr("لا يوجد دين مسجّل عليك. أضفه من «أموالي ← الديون» لتُحتسب الدفعة سداداً منه.",
+                "You have no debts recorded. Add one in “My money → Debts” and the payment will count as a repayment."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp))
         }
         if (shownDebts.isNotEmpty()) {
             SheetLabel(when {
-                debtLine -> "على أي دين؟"
-                t.income -> "هل هي على دين؟"
-                else -> "أو سجّلها على دين"
+                debtLine -> tr("لأي دين؟", "Which debt?")
+                t.income -> tr("هل هي مرتبطة بدين؟", "Is it for a debt?")
+                else -> tr("أو سجّلها على دين", "Or record it on a debt")
             })
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 shownDebts.forEach { d ->
@@ -193,18 +195,19 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
             }
             debts.firstOrNull { it.id == debtSel }?.let { d ->
                 val kind = if (t.income == d.owedToMe) Db.PAY else Db.ADD
-                Text("رح تنسجل «${entryLabel(d, kind)}» على دين ${d.person}",
+                Text(tr("ستُسجَّل «${entryLabel(d, kind)}» على دين ${d.person}", "Will be recorded as “${entryLabel(d, kind)}” on ${d.person}'s debt"),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp))
             }
         }
         if (!t.income && db.isJamiyaLine(selected)) {
             if (jamiyas.isEmpty()) {
-                Text("ما في جمعية مسجّلة. ضيفها من «أموالي ← الجمعية» وبيتعلّم الشهر مدفوع لحاله.",
+                Text(tr("لا توجد جمعية مسجّلة. أضفها من «أموالي ← الجمعية» ليُسجَّل الشهر مدفوعاً تلقائياً.",
+                    "No jamiya recorded. Add one in “My money → Jamiya” and the month will be marked paid by itself."),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp))
             } else {
-                SheetLabel("على أي جمعية؟")
+                SheetLabel(tr("لأي جمعية؟", "Which jamiya?"))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     jamiyas.forEach { j ->
                         FilterChip(selected = jamSel == j.id, onClick = { jamSel = j.id },
@@ -214,8 +217,8 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
                 jamiyas.firstOrNull { it.id == jamSel }?.let { j ->
                     val i = JamiyaMonths.indexAt(j, t.time)
                     Text(
-                        if (i in 0 until j.months) "رح يتعلّم شهر ${JamiyaMonths.label(j, i)} مدفوع"
-                        else "تاريخ الحركة برا أشهر هالجمعية",
+                        if (i in 0 until j.months) tr("سيُسجَّل شهر ${JamiyaMonths.label(j, i)} مدفوعاً", "${JamiyaMonths.label(j, i)} will be marked paid")
+                        else tr("تاريخ الحركة خارج أشهر هذه الجمعية", "This date is outside this jamiya's months"),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),
                     )
@@ -230,16 +233,16 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
                     onDone()
                 },
                 modifier = Modifier.padding(top = 8.dp),
-            ) { Text("«${t.merchant}» هو أنا، هاد تحويل بين حساباتي") }
+            ) { Text(tr("«${t.merchant}» هو أنا، هذا تحويل بين حساباتي", "“${t.merchant}” is me — this is a transfer between my accounts")) }
         }
-        SheetLabel("ملاحظة")
+        SheetLabel(tr("ملاحظة", "Note"))
         OutlinedTextField(
-            value = note, onValueChange = { note = it }, placeholder = { Text("مثلاً: غدا مع الشباب") },
+            value = note, onValueChange = { note = it }, placeholder = { Text(tr("مثلاً: غداء مع الأصدقاء", "e.g. lunch with friends")) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         )
         if (t.body.isNotBlank()) {
             TextButton(onClick = { showSms = !showSms }, modifier = Modifier.padding(top = 4.dp)) {
-                Text(if (showSms) "إخفاء المسج" else "عرض المسج الأصلي")
+                Text(if (showSms) tr("إخفاء الرسالة", "Hide SMS") else tr("عرض الرسالة الأصلية", "Show the original SMS"))
             }
             if (showSms) {
                 Text(t.body, style = MaterialTheme.typography.bodySmall,
@@ -269,12 +272,12 @@ fun TxnDialog(db: Db, id: Long, onDone: () -> Unit) {
             },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
-        ) { Text("حفظ", style = MaterialTheme.typography.titleMedium) }
-        ReceiptButtons("إيصال الحركة (PDF)", "receipt-${t.id}.pdf") { Receipt.forTxn(it, t.id) }
+        ) { Text(tr("حفظ", "Save"), style = MaterialTheme.typography.titleMedium) }
+        ReceiptButtons(tr("إيصال الحركة (PDF)", "Transaction receipt (PDF)"), "receipt-${t.id}.pdf") { Receipt.forTxn(it, t.id) }
         TextButton(
             onClick = { db.ignoreTxn(t.id); Notifier.cancel(ctx, t.id); onDone() },
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        ) { Text("تجاهل الحركة (مش مصروف)", color = MaterialTheme.colorScheme.error) }
+        ) { Text(tr("تجاهل الحركة (ليست مصروفاً)", "Ignore (not spending)"), color = MaterialTheme.colorScheme.error) }
     }
 }
 
@@ -289,23 +292,23 @@ fun AddDialog(db: Db, onDone: () -> Unit) {
     val value = amount.replace(',', '.').toDoubleOrNull()
 
     SheetFrame(onDone) {
-        Text("مصروف كاش", style = MaterialTheme.typography.titleLarge)
-        Text("للي دفعته نقداً وما وصلك عليه مسج.", style = MaterialTheme.typography.bodySmall,
+        Text(tr("مصروف نقدي", "Cash expense"), style = MaterialTheme.typography.titleLarge)
+        Text(tr("لما دفعته نقداً ولم تصلك عنه رسالة.", "For what you paid in cash with no SMS."), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = amount, onValueChange = { amount = it },
             placeholder = { Text("0.00", fontFamily = Ui.numbers, fontSize = 28.sp) },
             textStyle = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp),
-            suffix = { Text("د.أ") }, singleLine = true,
+            suffix = { Text(currency()) }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         )
-        SheetLabel("البند")
+        SheetLabel(tr("البند", "Budget line"))
         CategoryChips(cats, cat) { cat = it }
-        SheetLabel("ملاحظة")
+        SheetLabel(tr("ملاحظة", "Note"))
         OutlinedTextField(
-            value = note, onValueChange = { note = it }, placeholder = { Text("مثلاً: فلافل") },
+            value = note, onValueChange = { note = it }, placeholder = { Text(tr("مثلاً: فلافل", "e.g. falafel")) },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), singleLine = true,
         )
         Spacer(Modifier.height(20.dp))
@@ -325,7 +328,7 @@ fun AddDialog(db: Db, onDone: () -> Unit) {
             },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
-        ) { Text("أضف المصروف", style = MaterialTheme.typography.titleMedium) }
+        ) { Text(tr("إضافة المصروف", "Add expense"), style = MaterialTheme.typography.titleMedium) }
     }
 }
 
@@ -351,27 +354,27 @@ fun CategoryDialog(db: Db, cat: Category?, onDone: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (cat == null) "بند جديد" else "تعديل البند") },
+        title = { Text(if (cat == null) tr("بند جديد", "New budget line") else tr("تعديل البند", "Edit budget line")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("الاسم") },
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("الاسم", "Name")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = budget, onValueChange = { budget = it }, label = { Text("الميزانية الشهرية") },
+                    value = budget, onValueChange = { budget = it }, label = { Text(tr("الميزانية الشهرية", "Monthly budget")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("النوع", fontWeight = FontWeight.SemiBold)
+                Text(tr("النوع", "Type"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(type == Db.FIXED, { type = Db.FIXED }, { Text("ثابت") })
-                    FilterChip(type == Db.DAILY, { type = Db.DAILY }, { Text("يومي") })
-                    FilterChip(type == Db.RESERVE, { type = Db.RESERVE }, { Text("احتياط/ادخار") })
+                    FilterChip(type == Db.FIXED, { type = Db.FIXED }, { Text(tr("ثابت", "Fixed")) })
+                    FilterChip(type == Db.DAILY, { type = Db.DAILY }, { Text(tr("يومي", "Daily")) })
+                    FilterChip(type == Db.RESERVE, { type = Db.RESERVE }, { Text(tr("احتياط/ادخار", "Reserve/savings")) })
                 }
-                Text("«يومي» هو اللي بينحسب منه المسموح تصرفه كل يوم.", style = MaterialTheme.typography.bodySmall)
+                Text(tr("بنود «يومي» هي التي يُحسب منها المتاح للصرف كل يوم.", "“Daily” lines are what your daily allowance is worked out from."), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
-                Text("الأيقونة", fontWeight = FontWeight.SemiBold)
+                Text(tr("الأيقونة", "Icon"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     CategoryIcons.forEach { e ->
                         Box(
@@ -383,7 +386,7 @@ fun CategoryDialog(db: Db, cat: Category?, onDone: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("اللون", fontWeight = FontWeight.SemiBold)
+                Text(tr("اللون", "Colour"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     CategoryColors.forEach { c ->
                         Box(
@@ -396,12 +399,12 @@ fun CategoryDialog(db: Db, cat: Category?, onDone: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = dueDay, onValueChange = { dueDay = it.filter { ch -> ch.isDigit() }.take(2) },
-                    label = { Text("يوم الدفع بالشهر (اختياري، للتذكير)") },
+                    label = { Text(tr("يوم الدفع في الشهر (اختياري، للتذكير)", "Payment day of the month (optional, for reminders)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 if (confirmDelete) {
-                    Text("متأكد؟ حركات هالبند بترجع «بدها تصنيف».",
+                    Text(tr("هل أنت متأكد؟ ستعود حركات هذا البند إلى «بحاجة إلى تصنيف».", "Are you sure? This line's transactions will go back to “to sort”."),
                         color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
                 }
             }
@@ -416,16 +419,16 @@ fun CategoryDialog(db: Db, cat: Category?, onDone: () -> Unit) {
                     ))
                     onDone()
                 },
-            ) { Text("حفظ") }
+            ) { Text(tr("حفظ", "Save")) }
         },
         dismissButton = {
             Row {
                 if (cat != null) {
                     TextButton(onClick = {
                         if (confirmDelete) { db.deleteCategory(cat.id); onDone() } else confirmDelete = true
-                    }) { Text(if (confirmDelete) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error) }
                 }
-                TextButton(onClick = onDone) { Text("إلغاء") }
+                TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) }
             }
         },
     )
@@ -442,11 +445,11 @@ fun SenderPickerDialog(db: Db, account: Account, onDone: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text("مرسلين ${account.label}") },
+        title = { Text(tr("مرسلو ${account.label}", "Senders for ${account.label}")) },
         text = {
             Column {
                 if (list.isEmpty()) {
-                    Text("ما قدرت أقرأ المسجات. تأكد إنك أعطيت التطبيق صلاحية قراءة الرسائل.")
+                    Text(tr("تعذّرت قراءة الرسائل. تأكد من منح التطبيق صلاحية قراءة الرسائل.", "Couldn't read your SMS. Make sure the app has permission to read messages."))
                 } else {
                     LazyColumn(Modifier.heightIn(max = 380.dp)) {
                         items(list, key = { it.address }) { s ->
@@ -466,7 +469,8 @@ fun SenderPickerDialog(db: Db, account: Account, onDone: () -> Unit) {
                                 Column(Modifier.weight(1f)) {
                                     Text("${s.address}  (${s.count})", fontWeight = FontWeight.SemiBold)
                                     if (owned && !on) {
-                                        Text("تابع لـ ${accNames[owner] ?: "حساب ثاني"} — اختياره بينقله لهون",
+                                        Text(tr("تابع لـ ${accNames[owner] ?: "حساب آخر"} — اختياره ينقله إلى هنا",
+                                            "Belongs to ${accNames[owner] ?: "another account"} — picking it moves it here"),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.error)
                                     }
@@ -480,16 +484,16 @@ fun SenderPickerDialog(db: Db, account: Account, onDone: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = manual, onValueChange = { manual = it },
-                        label = { Text("أو اكتب اسم المرسل") }, singleLine = true,
+                        label = { Text(tr("أو اكتب اسم المرسل", "Or type the sender name")) }, singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(enabled = manual.isNotBlank(), onClick = {
                         db.addSender(manual, account.id); manual = ""; owners = db.senderAccounts()
-                    }) { Text("إضافة") }
+                    }) { Text(tr("إضافة", "Add")) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDone) { Text("تم") } },
+        confirmButton = { TextButton(onClick = onDone) { Text(tr("تم", "Done")) } },
     )
 }
 
@@ -499,25 +503,28 @@ fun AccountDialog(db: Db, account: Account?, defaultName: String, canDelete: Boo
     var name by remember { mutableStateOf(account?.name ?: defaultName) }
     var bank by remember { mutableStateOf(account?.bank ?: "") }
     var confirmDelete by remember { mutableStateOf(false) }
-    val banks = listOf("البنك العربي", "بنك الاتحاد", "بنك الإسكان", "بنك القاهرة عمان", "كابيتال بنك", "محفظة إلكترونية")
+    val banks = listOf(
+        tr("البنك العربي", "Arab Bank"), tr("بنك الاتحاد", "Bank al Etihad"), tr("بنك الإسكان", "Housing Bank"),
+        tr("بنك القاهرة عمان", "Cairo Amman Bank"), tr("كابيتال بنك", "Capital Bank"), tr("محفظة إلكترونية", "E-wallet"),
+    )
 
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (account == null) "حساب جديد" else "تعديل الحساب") },
+        title = { Text(if (account == null) tr("حساب جديد", "New account") else tr("تعديل الحساب", "Edit account")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("اسم الحساب") },
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("اسم الحساب", "Account name")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = bank, onValueChange = { bank = it }, label = { Text("البنك") },
+                OutlinedTextField(value = bank, onValueChange = { bank = it }, label = { Text(tr("البنك", "Bank")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     banks.forEach { b -> FilterChip(bank == b, { bank = b }, { Text(b) }) }
                 }
-                Text("بعد الحفظ، اختار مرسلين مسجات هالبنك من «اختيار مرسلين».",
+                Text(tr("بعد الحفظ، اختر مرسلي رسائل هذا البنك من «اختيار المرسلين».", "After saving, pick this bank's SMS senders with “Pick senders”."),
                     style = MaterialTheme.typography.bodySmall)
                 if (confirmDelete) {
-                    Text("متأكد؟ الحركات بتضل، بس ما رح تنقرأ مسجات جديدة لهالحساب.",
+                    Text(tr("هل أنت متأكد؟ ستبقى الحركات، لكن لن تُقرأ رسائل جديدة لهذا الحساب.", "Are you sure? Transactions stay, but no new SMS will be read for this account."),
                         color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
                 }
             }
@@ -526,16 +533,16 @@ fun AccountDialog(db: Db, account: Account?, defaultName: String, canDelete: Boo
             TextButton(enabled = name.isNotBlank(), onClick = {
                 db.saveAccount(Account(account?.id ?: 0, name.trim(), bank.trim()))
                 onDone()
-            }) { Text("حفظ") }
+            }) { Text(tr("حفظ", "Save")) }
         },
         dismissButton = {
             Row {
                 if (account != null && canDelete) {
                     TextButton(onClick = {
                         if (confirmDelete) { db.deleteAccount(account.id); onDone() } else confirmDelete = true
-                    }) { Text(if (confirmDelete) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error) }
                 }
-                TextButton(onClick = onDone) { Text("إلغاء") }
+                TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) }
             }
         },
     )

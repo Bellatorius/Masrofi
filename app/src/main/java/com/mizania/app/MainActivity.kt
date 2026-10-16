@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Lang.apply(Lang.choice(this))
         Notifier.createChannels(this)
         Daily.schedule(this)
         Processor.repairIfNeeded(this)
@@ -109,7 +110,7 @@ class MainActivity : ComponentActivity() {
         readIntent(intent)
         Bus.listener = { tick.intValue++ }
         setContent {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            CompositionLocalProvider(LocalLayoutDirection provides if (Lang.ar) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 MizaniaTheme {
                   androidx.compose.material3.Surface(
                     color = MaterialTheme.colorScheme.background,
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
     /** Fingerprint/face, or the phone's PIN on Android 10+. Turns the lock off if the phone has neither. */
     private fun authenticate() {
         if (Build.VERSION.SDK_INT < 28) { locked.value = false; return }
-        val b = BiometricPrompt.Builder(this).setTitle("ميزانيتي").setSubtitle("افتح التطبيق")
+        val b = BiometricPrompt.Builder(this).setTitle(tr("ميزانيتي", "My Budget")).setSubtitle(tr("افتح التطبيق", "Unlock the app"))
         allowCredential(b)
         val prompt = b.build()
         prompt.authenticate(CancellationSignal(), mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
@@ -182,7 +183,7 @@ class MainActivity : ComponentActivity() {
                 if (noLock) {
                     Db.get(this@MainActivity).setSetting("lock", "0")
                     locked.value = false
-                    Toast.makeText(this@MainActivity, "ما في بصمة أو رمز قفل على الموبايل، فانطفى القفل", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, tr("لا توجد بصمة أو رمز قفل على الهاتف، لذا أُوقف القفل", "This phone has no fingerprint or screen lock, so the app lock was turned off"), Toast.LENGTH_LONG).show()
                 }
             }
         })
@@ -195,7 +196,7 @@ class MainActivity : ComponentActivity() {
                 BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
             )
             Build.VERSION.SDK_INT >= 29 -> b.setDeviceCredentialAllowed(true)
-            else -> b.setNegativeButton("إلغاء", mainExecutor) { _, _ -> }
+            else -> b.setNegativeButton(tr("إلغاء", "Cancel"), mainExecutor) { _, _ -> }
         }
     }
 
@@ -235,7 +236,8 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
     val missingPerms = perms.any { ctx.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
 
     var triage by rememberSaveable { mutableStateOf(false) }
-    val titles = listOf("ميزانيتي", "الحركات", "التقارير", "أموالي", "الإعدادات")
+    val titles = listOf(tr("ميزانيتي", "My Budget"), tr("الحركات", "Transactions"), tr("التقارير", "Reports"),
+        tr("أموالي", "My money"), tr("الإعدادات", "Settings"))
     // Back from settings goes home instead of leaving the app.
     androidx.activity.compose.BackHandler(enabled = tab != 0 && !triage) { tab = 0 }
 
@@ -248,7 +250,7 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
                     title = { Text(titles[tab], style = MaterialTheme.typography.titleLarge) },
                     navigationIcon = {
                         if (tab == 4) IconButton(onClick = { tab = 0 }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("رجوع", "Back"))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -261,7 +263,7 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
                         onClick = { adding = true },
                         containerColor = Ui.p.pine, contentColor = Ui.p.onPine,
                         shape = RoundedCornerShape(20.dp),
-                    ) { Icon(Icons.Filled.Add, "إضافة مصروف كاش") }
+                    ) { Icon(Icons.Filled.Add, tr("إضافة مصروف نقدي", "Add a cash expense")) }
                 }
             },
         ) { pad ->
@@ -311,10 +313,10 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
 @Composable
 fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
     val items = listOf(
-        Triple("الرئيسية", Icons.Filled.Home, 0),
-        Triple("الحركات", Icons.AutoMirrored.Filled.List, 1),
-        Triple("التقارير", Icons.Filled.DateRange, 2),
-        Triple("أموالي", Icons.Filled.Person, 3),
+        Triple(tr("الرئيسية", "Home"), Icons.Filled.Home, 0),
+        Triple(tr("الحركات", "Activity"), Icons.AutoMirrored.Filled.List, 1),
+        Triple(tr("التقارير", "Reports"), Icons.Filled.DateRange, 2),
+        Triple(tr("أموالي", "My money"), Icons.Filled.Person, 3),
     )
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
@@ -354,9 +356,9 @@ fun LockScreen(onUnlock: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("🔒", fontSize = 56.sp)
-            Text("ميزانيتي مقفلة", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(tr("ميزانيتي مقفلة", "My Budget is locked"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onUnlock) { Text("افتح") }
+            Button(onClick = onUnlock) { Text(tr("فتح", "Unlock")) }
         }
     }
 }

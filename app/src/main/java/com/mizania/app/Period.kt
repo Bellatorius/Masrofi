@@ -76,7 +76,9 @@ object Period {
         return max(1, ceil((r.to - today).toDouble() / DAY).toInt())
     }
 
-    private val dayNames = arrayOf("", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت")
+    private val dayNamesAr = arrayOf("", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت")
+    private val dayNamesEn = arrayOf("", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    private val dayNames: Array<String> get() = if (Lang.ar) dayNamesAr else dayNamesEn
 
     fun label(mode: Int, r: Range): String {
         val dm = SimpleDateFormat("d/M", Locale.US)

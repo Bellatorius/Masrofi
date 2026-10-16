@@ -42,13 +42,13 @@ object Daily {
             val spentAll = db.spentByCategory(today.from, today.to).values.sum()
             val pending = db.pending().size
             val text = buildString {
-                append("صرفت اليوم ${fmt(spentAll)}")
-                if (al.leftToday < 0) append(" وزدت عن حدك بـ ${fmt(-al.leftToday)}")
-                append(". بكرا مسموحلك ${fmt(al.tomorrow)}.")
-                al.balance?.let { append(" رصيدك ${fmt(it)}.") }
-                if (pending > 0) append(" في $pending حركة بدها تصنيف.")
+                append(tr("صرفت اليوم ${fmt(spentAll)}", "You spent ${fmt(spentAll)} today"))
+                if (al.leftToday < 0) append(tr(" وتجاوزت حدك بمقدار ${fmt(-al.leftToday)}", ", ${fmt(-al.leftToday)} over your limit"))
+                append(tr(". المتاح لك غداً ${fmt(al.tomorrow)}.", ". Tomorrow you can spend ${fmt(al.tomorrow)}."))
+                al.balance?.let { append(tr(" رصيدك ${fmt(it)}.", " Balance: ${fmt(it)}.")) }
+                if (pending > 0) append(tr(" لديك ${txnsText(pending)} بحاجة إلى تصنيف.", " ${txnsText(pending)} to sort."))
             }
-            Notifier.alert(ctx, 900_001, "ملخص اليوم", text)
+            Notifier.alert(ctx, 900_001, tr("ملخص اليوم", "Today's summary"), text)
         }
 
         // Fixed payments due tomorrow that have not been paid this cycle.
@@ -65,8 +65,9 @@ object Daily {
             val paid = spent[c.id] ?: 0.0
             val done = if (c.budget > 0) paid >= c.budget * 0.9 else paid > 0
             if (done || !db.firstTime("due:${c.id}:$dayKey")) continue
-            Notifier.alert(ctx, 900_100L + c.id, "${c.icon} بكرا موعد ${c.name}",
-                if (c.budget > 0) "المبلغ ${fmt(c.budget - paid)}" else "لا تنسى الدفعة")
+            Notifier.alert(ctx, 900_100L + c.id, tr("${c.icon} غداً موعد ${c.name}", "${c.icon} ${c.name} is due tomorrow"),
+                if (c.budget > 0) tr("المبلغ ${fmt(c.budget - paid)}", "Amount: ${fmt(c.budget - paid)}")
+                else tr("لا تنسَ الدفعة", "Don't forget the payment"))
         }
 
         // Last day of the budget month: the month report.
@@ -76,8 +77,9 @@ object Daily {
             val prevSpent = db.spentByCategory(prev.from, prev.to)
             val total = spent.values.sum()
             val tip = monthTip(cats, spent, prevSpent, current = false) ?: ""
-            Notifier.alert(ctx, 900_002, "تقرير الشهر جاهز 📊",
-                (if (ci.received) "صرفت ${fmt(total)} من راتب ${fmt(ci.salary)}. " else "صرفت ${fmt(total)} هالشهر. ") + tip)
+            Notifier.alert(ctx, 900_002, tr("تقرير الشهر جاهز 📊", "Your month report is ready 📊"),
+                (if (ci.received) tr("صرفت ${fmt(total)} من راتب ${fmt(ci.salary)}. ", "You spent ${fmt(total)} of a ${fmt(ci.salary)} salary. ")
+                else tr("صرفت ${fmt(total)} هذا الشهر. ", "You spent ${fmt(total)} this month. ")) + tip)
         }
     }
 }

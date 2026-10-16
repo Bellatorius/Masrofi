@@ -87,13 +87,13 @@ object Backup {
         val df = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
         fun q(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
         val sb = StringBuilder("﻿") // BOM so Excel shows Arabic correctly
-        sb.append("التاريخ,المبلغ,دخل/صرف,الجهة,نوع الحركة,البند,الحساب,ملاحظة\n")
+        sb.append(tr("التاريخ,المبلغ,دخل/صرف,الجهة,نوع الحركة,البند,الحساب,ملاحظة\n", "Date,Amount,In/Out,Party,Type,Budget line,Account,Note\n"))
         for (t in db.recent(1_000_000)) {
             sb.append(df.format(Date(t.time))).append(',')
             sb.append(String.format(Locale.US, "%.3f", t.amount)).append(',')
-            sb.append(if (t.income) "دخل" else "صرف").append(',')
-            sb.append(q(t.merchant)).append(',')
-            sb.append(q(t.kind)).append(',')
+            sb.append(if (t.income) tr("دخل", "In") else tr("صرف", "Out")).append(',')
+            sb.append(q(merchantLabel(t.merchant))).append(',')
+            sb.append(q(t.kindText)).append(',')
             sb.append(q(t.categoryId?.let { cats[it] } ?: "")).append(',')
             sb.append(q(t.accountId?.let { accs[it] } ?: "")).append(',')
             sb.append(q(t.note)).append('\n')

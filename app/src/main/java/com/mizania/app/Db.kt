@@ -23,21 +23,25 @@ data class Jamiya(
     val startMonth: String, val myTurn: Int, val paidMonths: Set<Int>, val received: Boolean,
 )
 
-/** Default emoji and color for the built-in budget names. */
-fun defaultLook(name: String): Pair<String, Long> = when {
-    name.contains("إيجار") -> "🏠" to 0xFF5B6CFF
-    name.contains("جمعية") -> "🤝" to 0xFF8E59D9
-    name.contains("زوج") -> "💝" to 0xFFE0559B
-    name.contains("كهرباء") || name.contains("فواتير") -> "💡" to 0xFFF2A516
-    name.contains("دين") || name.contains("ديون") || name.contains("قسط") || name.contains("أقساط") -> "💳" to 0xFFE5533D
-    name.contains("مونة") || name.contains("أكل") || name.contains("سوبرماركت") -> "🛒" to 0xFF2EA36A
-    name.contains("مواصلات") || name.contains("بنزين") -> "🚗" to 0xFF1E88E5
-    name.contains("طلعات") || name.contains("مطاعم") -> "☕" to 0xFF8D6E63
-    name.contains("صحة") || name.contains("صيدلية") || name.contains("دواء") -> "💊" to 0xFF00ACC1
-    name.contains("سكن") -> "🏠" to 0xFF5B6CFF
-    name.contains("طوارئ") -> "🚑" to 0xFFD84343
-    name.contains("ادخار") -> "💰" to 0xFF26A69A
-    else -> "📦" to 0xFF78909C
+/** Default emoji and color for the built-in budget names (Arabic or English). */
+fun defaultLook(name: String): Pair<String, Long> {
+    val n = name.lowercase()
+    fun has(vararg k: String) = k.any { n.contains(it) }
+    return when {
+        has("إيجار", "rent") -> "🏠" to 0xFF5B6CFF
+        has("جمعية", "jamiya") -> "🤝" to 0xFF8E59D9
+        has("زوج", "spouse") -> "💝" to 0xFFE0559B
+        has("كهرباء", "فواتير", "bill") -> "💡" to 0xFFF2A516
+        has("دين", "ديون", "قسط", "أقساط", "debt", "loan", "instal") -> "💳" to 0xFFE5533D
+        has("مونة", "أكل", "سوبرماركت", "مواد غذائية", "grocer", "food", "supermarket") -> "🛒" to 0xFF2EA36A
+        has("مواصلات", "بنزين", "وقود", "transport", "fuel") -> "🚗" to 0xFF1E88E5
+        has("طلعات", "مطاعم", "ترفيه", "outing", "restaurant", "dining") -> "☕" to 0xFF8D6E63
+        has("صحة", "صيدلية", "دواء", "health", "pharmac") -> "💊" to 0xFF00ACC1
+        has("سكن", "housing") -> "🏠" to 0xFF5B6CFF
+        has("طوارئ", "emergenc") -> "🚑" to 0xFFD84343
+        has("ادخار", "saving") -> "💰" to 0xFF26A69A
+        else -> "📦" to 0xFF78909C
+    }
 }
 
 data class Account(val id: Long, val name: String, val bank: String) {
@@ -120,7 +124,11 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
 
         fun get(ctx: Context): Db =
             instance ?: synchronized(this) {
-                instance ?: Db(ctx.applicationContext).also { instance = it }
+                instance ?: Db(ctx.applicationContext).also {
+                    instance = it
+                    // Receivers and the widget can start the app without the activity: load the language here.
+                    Lang.apply(it.setting("lang", Lang.SYSTEM))
+                }
             }
 
         fun norm(address: String): String = address.trim().lowercase(Locale.ROOT)
@@ -274,22 +282,22 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
     }
 
     private fun insertDefaultAccount(db: SQLiteDatabase): Long =
-        db.insert("accounts", null, ContentValues().apply { put("name", "الحساب 1"); put("bank", "") })
+        db.insert("accounts", null, ContentValues().apply { put("name", tr("الحساب 1", "Account 1")); put("bank", "") })
 
     private fun seed(db: SQLiteDatabase) {
         // Generic starting lines with no amounts: each person sets their own budget.
         val defaults = listOf(
-            Triple("سكن وإيجار", 0.0, FIXED),
-            Triple("فواتير (كهرباء، ماء، إنترنت، موبايل)", 0.0, FIXED),
-            Triple("أقساط وديون", 0.0, FIXED),
-            Triple("جمعية", 0.0, FIXED),
-            Triple("مونة وسوبرماركت", 0.0, FIXED),
-            Triple("مواصلات وبنزين", 0.0, DAILY),
-            Triple("طلعات ومطاعم", 0.0, DAILY),
-            Triple("صحة وصيدلية", 0.0, DAILY),
-            Triple("أغراض متفرقة", 0.0, DAILY),
-            Triple("طوارئ", 0.0, RESERVE),
-            Triple("ادخار", 0.0, RESERVE),
+            Triple(tr("السكن والإيجار", "Housing & rent"), 0.0, FIXED),
+            Triple(tr("الفواتير (كهرباء، ماء، إنترنت، هاتف)", "Bills (electricity, water, internet, phone)"), 0.0, FIXED),
+            Triple(tr("الأقساط والديون", "Instalments & debts"), 0.0, FIXED),
+            Triple(tr("جمعية", "Jamiya"), 0.0, FIXED),
+            Triple(tr("المواد الغذائية والسوبرماركت", "Groceries & supermarket"), 0.0, FIXED),
+            Triple(tr("المواصلات والوقود", "Transport & fuel"), 0.0, DAILY),
+            Triple(tr("المطاعم والترفيه", "Restaurants & outings"), 0.0, DAILY),
+            Triple(tr("الصحة والصيدلية", "Health & pharmacy"), 0.0, DAILY),
+            Triple(tr("مشتريات متنوعة", "Miscellaneous"), 0.0, DAILY),
+            Triple(tr("الطوارئ", "Emergencies"), 0.0, RESERVE),
+            Triple(tr("ادخار", "Savings"), 0.0, RESERVE),
         )
         var billsId = -1L
         defaults.forEachIndexed { i, (name, budget, type) ->
@@ -298,7 +306,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
                 put("name", name); put("budget", budget); put("ctype", type); put("sort", i)
                 put("icon", icon); put("color", color)
             })
-            if (name.startsWith("فواتير")) billsId = id
+            if (i == 1) billsId = id
         }
         // Jordan's mobile and internet providers go to bills out of the box.
         for (k in listOf("ZAIN", "ORANGE", "UMNIAH")) {
@@ -1009,9 +1017,9 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
         if (kotlin.math.abs(diff) >= 0.0005) addDebtEntry(id, PAY, diff, System.currentTimeMillis(), CORRECTION, null)
     }
 
-    /** A budget line that is money put aside toward goals (named ادخار / توفير). */
-    fun isSavings(cat: Category?): Boolean =
-        cat != null && (cat.name.contains("ادخار") || cat.name.contains("توفير") || cat.name.contains("حصالة"))
+    /** A budget line that is money put aside toward goals (named ادخار / توفير / Savings). */
+    fun isSavings(cat: Category?): Boolean = cat != null &&
+        listOf("ادخار", "توفير", "حصالة", "saving").any { cat.name.lowercase().contains(it) }
 
     /** The goal a transaction was saved into, if any. */
     fun goalForTxn(txnId: Long): Long? =
@@ -1055,7 +1063,7 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
 
     /** A budget line for paying off what you owe (قسط الدين, دين…). */
     fun isDebtLine(cat: Category?): Boolean = cat != null &&
-        (cat.name.contains("دين") || cat.name.contains("ديون") || cat.name.contains("قسط") || cat.name.contains("أقساط") || cat.name.contains("اقساط"))
+        listOf("دين", "ديون", "قسط", "أقساط", "اقساط", "debt", "loan", "instal").any { cat.name.lowercase().contains(it) }
 
     /** Debts you owe that are still open. */
     fun openDebtsIOwe(): List<Debt> = debts().filter { !it.owedToMe && !it.closed }
@@ -1076,7 +1084,8 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
     }
 
     /** A budget line for the jamiya (savings circle). */
-    fun isJamiyaLine(cat: Category?): Boolean = cat != null && cat.name.contains("جمعية")
+    fun isJamiyaLine(cat: Category?): Boolean = cat != null &&
+        (cat.name.contains("جمعية") || cat.name.lowercase().contains("jamiya"))
 
     fun jamiyaForTxn(txnId: Long): Long? =
         readableDatabase.rawQuery("SELECT jamiya_id FROM jamiya_paid WHERE txn_id=? LIMIT 1", arrayOf(txnId.toString()))
@@ -1114,11 +1123,12 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
     /** Where a transaction's money went, in words, for the confirmation line. Null when nowhere. */
     fun linkSummary(txnId: Long): String? {
         val t = txn(txnId) ?: return null
-        goalForTxn(txnId)?.let { g -> goals().firstOrNull { it.id == g }?.let { return "انضافت ${fmt(t.amount)} لهدف «${it.name}»" } }
-        debtForTxn(txnId)?.let { d -> debt(d)?.let { return "انحسبت ${fmt(t.amount)} سداد على دين ${it.person}" } }
+        goalForTxn(txnId)?.let { g -> goals().firstOrNull { it.id == g }?.let { return tr("أُضيف ${fmt(t.amount)} إلى هدف «${it.name}»", "Added ${fmt(t.amount)} to the goal “${it.name}”") } }
+        debtForTxn(txnId)?.let { d -> debt(d)?.let { return tr("احتُسب ${fmt(t.amount)} سداداً من دين ${it.person}", "Counted ${fmt(t.amount)} as a repayment on ${it.person}'s debt") } }
         jamiyaForTxn(txnId)?.let { j ->
             jamiyas().firstOrNull { it.id == j }?.let {
-                return "تعلّم شهر ${JamiyaMonths.label(it, JamiyaMonths.indexAt(it, t.time))} مدفوع بـ«${it.name}»"
+                return tr("سُجّل شهر ${JamiyaMonths.label(it, JamiyaMonths.indexAt(it, t.time))} مدفوعاً في «${it.name}»",
+                    "Marked ${JamiyaMonths.label(it, JamiyaMonths.indexAt(it, t.time))} as paid in “${it.name}”")
             }
         }
         return null

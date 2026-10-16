@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ميزانيتي</string>
-    <string name="widget_desc">قديش مسموحلك تصرف اليوم</string>
+    <string name="app_name">My Budget</string>
+    <string name="widget_title">You can spend today</string>
+    <string name="widget_desc">How much you can spend today</string>
 </resources>

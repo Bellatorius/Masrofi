@@ -9,7 +9,7 @@ import android.provider.Telephony
 import java.security.MessageDigest
 import java.util.Locale
 
-fun fmt(v: Double): String = String.format(Locale.US, "%,.2f", v) + " د.أ"
+fun fmt(v: Double): String = String.format(Locale.US, "%,.2f", v) + " " + currency()
 
 /** Lets the open screen refresh when an SMS is recorded in the background. */
 object Bus {
@@ -64,11 +64,12 @@ object Processor {
             db.reconcileDirections()
             val t = db.txn(id) ?: return id
             when {
-                t.income && t.kind == "راتب" -> Notifier.info(ctx, id, "نزل الراتب: ${fmt(t.amount)}",
-                    "بلّش شهر جديد بالميزانية" + (t.balance?.let { " — رصيدك ${fmt(it)}" } ?: ""))
-                t.income -> Notifier.info(ctx, id, "وصلك ${fmt(t.amount)} (${t.kind})",
-                    t.merchant + (t.balance?.let { " — رصيدك صار ${fmt(it)}" } ?: ""))
-                t.categoryId == null -> Notifier.ask(ctx, id, t.amount, t.merchant.ifEmpty { t.kind })
+                t.income && t.kind == "راتب" -> Notifier.info(ctx, id, tr("وصل الراتب: ${fmt(t.amount)}", "Salary arrived: ${fmt(t.amount)}"),
+                    tr("بدأ شهر جديد في الميزانية", "A new budget month has started") +
+                        (t.balance?.let { tr(" — رصيدك ${fmt(it)}", " — balance ${fmt(it)}") } ?: ""))
+                t.income -> Notifier.info(ctx, id, tr("وصلك ${fmt(t.amount)} (${t.kindText})", "You received ${fmt(t.amount)} (${t.kindText})"),
+                    merchantLabel(t.merchant) + (t.balance?.let { tr(" — رصيدك الآن ${fmt(it)}", " — balance now ${fmt(it)}") } ?: ""))
+                t.categoryId == null -> Notifier.ask(ctx, id, t.amount, t.title)
                 else -> afterCategorized(ctx, id, t.categoryId, notifyRecorded = true)
             }
             Bus.changed()
@@ -95,19 +96,20 @@ object Processor {
             val base = "${cat.id}:${cycle.from}"
             if (pct >= 1.0 && db.firstTime("$base:100")) {
                 db.firstTime("$base:80")
-                Notifier.alert(ctx, cat.id, "تجاوزت ميزانية ${cat.name}",
-                    "صرفت ${fmt(spent)} من ${fmt(cat.budget)} — زيادة ${fmt(-left)}")
+                Notifier.alert(ctx, cat.id, tr("تجاوزت ميزانية ${cat.name}", "Over budget: ${cat.name}"),
+                    tr("صرفت ${fmt(spent)} من ${fmt(cat.budget)} — بزيادة ${fmt(-left)}",
+                        "Spent ${fmt(spent)} of ${fmt(cat.budget)} — ${fmt(-left)} over"))
                 return
             }
             if (pct >= 0.8 && pct < 1.0 && db.firstTime("$base:80")) {
-                Notifier.alert(ctx, cat.id, "قربت تخلص ${cat.name}",
-                    "صرفت ${(pct * 100).toInt()}% — باقيلك ${fmt(left)}")
+                Notifier.alert(ctx, cat.id, tr("اقتربت من نهاية ميزانية ${cat.name}", "${cat.name} is almost used up"),
+                    tr("صرفت ${(pct * 100).toInt()}% — المتبقي ${fmt(left)}", "Spent ${(pct * 100).toInt()}% — ${fmt(left)} left"))
                 return
             }
         }
         if (notifyRecorded) {
-            val tail = if (cat.budget > 0) " — باقي ${fmt(left)}" else ""
-            Notifier.info(ctx, txnId, "${fmt(txn.amount)} على ${cat.name}", txn.merchant + tail)
+            val tail = if (cat.budget > 0) tr(" — المتبقي ${fmt(left)}", " — ${fmt(left)} left") else ""
+            Notifier.info(ctx, txnId, tr("${fmt(txn.amount)} على ${cat.name}", "${fmt(txn.amount)} on ${cat.name}"), merchantLabel(txn.merchant) + tail)
         }
     }
 

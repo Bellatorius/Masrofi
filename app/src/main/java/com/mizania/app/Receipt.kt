@@ -65,58 +65,59 @@ object Receipt {
         val cat = db.category(t.categoryId)
         val acc = db.accounts().firstOrNull { it.id == t.accountId }
         val rows = ArrayList<Pair<String, String>>()
-        rows += "التاريخ" to stamp(t.time)
-        rows += "المبلغ" to fmt(t.amount)
-        rows += "الحركة" to if (t.income) "دخل" else "صرف"
-        rows += (if (t.income) "من" else "إلى / المزوّد") to t.merchant.ifEmpty { "—" }
-        rows += "طريقة التحويل" to method(t)
-        if (cat != null) rows += "البند" to cat.name
-        db.debtForTxn(id)?.let { did -> db.debt(did)?.let { d -> rows += "على دين" to "${d.person} (${directionLabel(d.owedToMe)})" } }
+        rows += tr("التاريخ", "Date") to stamp(t.time)
+        rows += tr("المبلغ", "Amount") to fmt(t.amount)
+        rows += tr("الحركة", "Type") to if (t.income) tr("دخل", "Money in") else tr("صرف", "Money out")
+        rows += (if (t.income) tr("من", "From") else tr("إلى / المزوّد", "To / provider")) to merchantLabel(t.merchant).ifEmpty { "—" }
+        rows += tr("طريقة التحويل", "Method") to method(t)
+        if (cat != null) rows += tr("البند", "Budget line") to cat.name
+        db.debtForTxn(id)?.let { did -> db.debt(did)?.let { d -> rows += tr("على دين", "Debt") to "${d.person} (${directionLabel(d.owedToMe)})" } }
         db.jamiyaForTxn(id)?.let { jid ->
             db.jamiyas().firstOrNull { it.id == jid }?.let { j ->
-                rows += "جمعية" to "${j.name}، شهر ${JamiyaMonths.label(j, JamiyaMonths.indexAt(j, t.time))}"
+                rows += tr("جمعية", "Jamiya") to j.name + tr("، شهر ", ", month ") + JamiyaMonths.label(j, JamiyaMonths.indexAt(j, t.time))
             }
         }
-        db.goalForTxn(id)?.let { gid -> db.goals().firstOrNull { it.id == gid }?.let { g -> rows += "ادخار" to g.name } }
-        if (acc != null) rows += "الحساب" to (acc.label + if (t.acctNo.isNotEmpty()) "  ${t.acctNo}" else "")
-        if (t.note.isNotBlank()) rows += "ملاحظة" to t.note
-        rows += "رقم الحركة" to "#$id"
-        return Doc("إيصال حركة", t.merchant.ifEmpty { t.kind }, (if (t.income) "+" else "") + fmt(t.amount), rows)
+        db.goalForTxn(id)?.let { gid -> db.goals().firstOrNull { it.id == gid }?.let { g -> rows += tr("ادخار", "Savings") to g.name } }
+        if (acc != null) rows += tr("الحساب", "Account") to (acc.label + if (t.acctNo.isNotEmpty()) "  ${t.acctNo}" else "")
+        if (t.note.isNotBlank()) rows += tr("ملاحظة", "Note") to t.note
+        rows += tr("رقم الحركة", "Transaction no.") to "#$id"
+        return Doc(tr("إيصال حركة", "Transaction receipt"), t.title, (if (t.income) "+" else "") + fmt(t.amount), rows)
     }
 
     private fun method(t: Txn): String = when {
-        t.manual -> "كاش"
-        t.kind.contains("كليك") -> "كليك (CliQ)"
-        t.kind.contains("حوالة") || t.kind.contains("تحويل") -> "حوالة بنكية"
-        t.kind.contains("شراء") -> "شراء بالبطاقة"
-        t.kind.contains("سحب") -> "سحب من الصراف"
-        t.kind.contains("راتب") -> "راتب"
-        t.kind.contains("إيداع") -> "إيداع"
-        else -> t.kind.ifEmpty { "—" }
+        t.manual -> tr("نقداً", "Cash")
+        t.kind.contains("كليك") -> tr("كليك (CliQ)", "CliQ")
+        t.kind.contains("حوالة") || t.kind.contains("تحويل") -> tr("حوالة بنكية", "Bank transfer")
+        t.kind.contains("شراء") -> tr("شراء بالبطاقة", "Card purchase")
+        t.kind.contains("سحب") -> tr("سحب من الصراف", "ATM withdrawal")
+        t.kind.contains("راتب") -> tr("راتب", "Salary")
+        t.kind.contains("إيداع") -> tr("إيداع", "Deposit")
+        else -> t.kindText.ifEmpty { "—" }
     }
 
     fun forDebt(ctx: Context, id: Long): Doc? {
         val db = Db.get(ctx)
         val d = db.debt(id) ?: return null
         val rows = arrayListOf(
-            "الشخص" to d.person,
-            "الدين" to if (d.owedToMe) "إلي (هو مستلف مني)" else "عليّ (أنا مستلف)",
-            "المبلغ الأصلي" to fmt(d.amount),
+            tr("الشخص", "Person") to d.person,
+            tr("الدين", "Debt") to if (d.owedToMe) tr("لي (هو مقترض مني)", "Owed to me (they borrowed from me)")
+                else tr("عليّ (أنا المقترض)", "I owe (I borrowed)"),
+            tr("المبلغ الأصلي", "Original amount") to fmt(d.amount),
         )
-        if (d.added > 0) rows += "زيادات" to fmt(d.added)
-        rows += (if (d.owedToMe) "رجعلي" else "سددت") to fmt(d.paid)
-        rows += "الباقي" to fmt(kotlin.math.max(0.0, d.remaining))
-        if (d.note.isNotBlank()) rows += "ملاحظة" to d.note
-        rows += "تاريخ الدين" to day(d.createdAt)
+        if (d.added > 0) rows += tr("زيادات", "Added") to fmt(d.added)
+        rows += (if (d.owedToMe) tr("استرددت", "Paid back") else tr("سدّدت", "Paid")) to fmt(d.paid)
+        rows += tr("المتبقي", "Remaining") to fmt(kotlin.math.max(0.0, d.remaining))
+        if (d.note.isNotBlank()) rows += tr("ملاحظة", "Note") to d.note
+        rows += tr("تاريخ الدين", "Debt date") to day(d.createdAt)
         val table = db.debtEntries(id).sortedBy { it.time }.map { e ->
             listOf(
                 day(e.time),
-                if (e.note == Db.CORRECTION) "تعديل" else entryLabel(d, e.kind) + if (e.txnId != null) " (بنك)" else "",
+                if (e.note == Db.CORRECTION) tr("تعديل", "Correction") else entryLabel(d, e.kind) + if (e.txnId != null) tr(" (بنك)", " (bank)") else "",
                 fmt(e.amount),
             )
         }
-        return Doc("كشف دين", d.person, fmt(kotlin.math.max(0.0, d.remaining)) + " باقي", rows,
-            listOf("التاريخ", "البيان", "المبلغ"), table)
+        return Doc(tr("كشف دين", "Debt statement"), d.person, fmt(kotlin.math.max(0.0, d.remaining)) + tr(" متبقٍ", " left"), rows,
+            listOf(tr("التاريخ", "Date"), tr("البيان", "Details"), tr("المبلغ", "Amount")), table)
     }
 
     fun forJamiya(ctx: Context, id: Long): Doc? {
@@ -124,28 +125,31 @@ object Receipt {
         val j = db.jamiyas().firstOrNull { it.id == id } ?: return null
         val paid = j.paidMonths.count { it in 0 until j.months }
         val rows = arrayListOf(
-            "الجمعية" to j.name,
-            "القسط الشهري" to fmt(j.monthly),
-            "عدد الأشهر" to "${j.months}",
-            "دوري" to "الشهر ${j.myTurn} (${JamiyaMonths.label(j, j.myTurn - 1)})",
-            "دفعت" to "$paid شهر، ${fmt(paid * j.monthly)}",
-            "قبضت" to if (j.received) "نعم، ${fmt(j.monthly * j.months)}" else "لسا",
+            tr("الجمعية", "Jamiya") to j.name,
+            tr("القسط الشهري", "Monthly payment") to fmt(j.monthly),
+            tr("عدد الأشهر", "Months") to "${j.months}",
+            tr("دوري", "My turn") to tr("الشهر ${j.myTurn}", "Month ${j.myTurn}") + " (${JamiyaMonths.label(j, j.myTurn - 1)})",
+            tr("دفعت", "Paid") to monthsText(paid) + tr("، ", ", ") + fmt(paid * j.monthly),
+            tr("قبضت", "Received") to if (j.received) tr("نعم، ", "Yes, ") + fmt(j.monthly * j.months) else tr("ليس بعد", "Not yet"),
         )
         val table = (0 until j.months).map { i ->
-            listOf(JamiyaMonths.label(j, i), if (i in j.paidMonths) "مدفوع" else "—", if (i == j.myTurn - 1) "دوري" else "")
+            listOf(JamiyaMonths.label(j, i), if (i in j.paidMonths) tr("مدفوع", "Paid") else "—", if (i == j.myTurn - 1) tr("دوري", "My turn") else "")
         }
-        return Doc("كشف جمعية", j.name, fmt(paid * j.monthly) + " مدفوع", rows, listOf("الشهر", "الدفع", ""), table)
+        return Doc(tr("كشف جمعية", "Jamiya statement"), j.name, fmt(paid * j.monthly) + tr(" مدفوع", " paid"), rows,
+            listOf(tr("الشهر", "Month"), tr("الدفع", "Payment"), ""), table)
     }
 
     fun forCategory(ctx: Context, cat: Category?, range: Range, periodLabel: String): Doc {
         val db = Db.get(ctx)
         val list = db.txnsInCategory(cat?.id, range.from, range.to).sortedBy { it.time }
         val total = list.sumOf { it.amount }
-        val rows = arrayListOf("البند" to (cat?.name ?: "بدون بند"), "الفترة" to periodLabel, "عدد الحركات" to "${list.size}",
-            "المجموع" to fmt(total))
-        if (cat != null && cat.budget > 0) rows += "الميزانية" to fmt(cat.budget)
-        val table = list.map { listOf(day(it.time), it.merchant.ifEmpty { it.kind }, fmt(it.amount)) }
-        return Doc("كشف بند", cat?.name ?: "بدون بند", fmt(total), rows, listOf("التاريخ", "الجهة", "المبلغ"), table)
+        val noLine = tr("بدون بند", "No line")
+        val rows = arrayListOf(tr("البند", "Budget line") to (cat?.name ?: noLine), tr("الفترة", "Period") to periodLabel,
+            tr("عدد الحركات", "Transactions") to "${list.size}", tr("المجموع", "Total") to fmt(total))
+        if (cat != null && cat.budget > 0) rows += tr("الميزانية", "Budget") to fmt(cat.budget)
+        val table = list.map { listOf(day(it.time), it.title, fmt(it.amount)) }
+        return Doc(tr("كشف بند", "Budget line statement"), cat?.name ?: noLine, fmt(total), rows,
+            listOf(tr("التاريخ", "Date"), tr("الجهة", "Party"), tr("المبلغ", "Amount")), table)
     }
 
     // ---------------- drawing ----------------
@@ -163,11 +167,11 @@ object Receipt {
         typeface = tf; textSize = size; this.color = color
     }
 
-    /** Draws right-to-left text in a box; returns its height. */
+    /** Draws text in a box, right-to-left in Arabic; returns its height. */
     private fun text(c: Canvas, s: String, p: TextPaint, x: Float, y: Float, width: Float, align: Layout.Alignment): Float {
         val l = StaticLayout.Builder.obtain(s, 0, s.length, p, width.toInt().coerceAtLeast(10))
             .setAlignment(align)
-            .setTextDirection(TextDirectionHeuristics.RTL)
+            .setTextDirection(if (Lang.ar) TextDirectionHeuristics.RTL else TextDirectionHeuristics.LTR)
             .setLineSpacing(0f, 1.15f)
             .build()
         c.save(); c.translate(x, y); l.draw(c); c.restore()
@@ -186,11 +190,12 @@ object Receipt {
 
         fun finish() {
             val cc = c ?: return
-            val foot = "صادر من تطبيق «ميزانيتي» بتاريخ $made. ملخّص من رسائل البنك على الهاتف، وليس مستنداً رسمياً من البنك."
+            val foot = tr("صادر من تطبيق «ميزانيتي» بتاريخ $made. ملخّص من رسائل البنك على الهاتف، وليس مستنداً رسمياً من البنك.",
+                "Made with the My Budget app on $made. A summary of bank SMS on this phone, not an official bank document.")
             val lp = Paint().apply { color = line; strokeWidth = 0.8f }
             cc.drawLine(M, H - 52f, W - M, H - 52f, lp)
             text(cc, foot, paint(f.regular, 7.5f, muted), M, H - 46f, inner, Layout.Alignment.ALIGN_NORMAL)
-            text(cc, "صفحة $pageNo", paint(f.regular, 7.5f, muted), M, H - 22f, inner, Layout.Alignment.ALIGN_OPPOSITE)
+            text(cc, tr("صفحة $pageNo", "Page $pageNo"), paint(f.regular, 7.5f, muted), M, H - 22f, inner, Layout.Alignment.ALIGN_OPPOSITE)
             pdf.finishPage(page!!)
         }
 
@@ -209,12 +214,12 @@ object Receipt {
         // Header band.
         val band = Paint().apply { color = pine }
         cc0.drawRect(0f, 0f, W.toFloat(), 96f, band)
-        text(cc0, "ميزانيتي", paint(f.bold, 10f, Color.rgb(0xF0, 0xBE, 0x45)), M, 18f, inner, Layout.Alignment.ALIGN_NORMAL)
+        text(cc0, tr("ميزانيتي", "My Budget"), paint(f.bold, 10f, Color.rgb(0xF0, 0xBE, 0x45)), M, 18f, inner, Layout.Alignment.ALIGN_NORMAL)
         text(cc0, doc.title, paint(f.bold, 20f, Color.WHITE), M, 34f, inner, Layout.Alignment.ALIGN_NORMAL)
         text(cc0, doc.subtitle, paint(f.regular, 10f, Color.rgb(0xD6, 0xDD, 0xD8)), M, 66f, inner, Layout.Alignment.ALIGN_NORMAL)
         y = 112f
         doc.bigAmount?.let {
-            y += text(cc0, "$it د.أ", paint(f.numbers, 26f, gold), M, y, inner, Layout.Alignment.ALIGN_NORMAL) + 10f
+            y += text(cc0, it, paint(f.numbers, 26f, gold), M, y, inner, Layout.Alignment.ALIGN_NORMAL) + 10f
         }
 
         // Label / value rows.
@@ -224,8 +229,9 @@ object Receipt {
         for ((k, v) in doc.rows) {
             ensure(28f)
             val cc = c!!
-            val h1 = text(cc, k, labelP, M + inner * 0.55f, y + 6f, inner * 0.45f, Layout.Alignment.ALIGN_NORMAL)
-            val h2 = text(cc, v, valueP, M, y + 6f, inner * 0.55f, Layout.Alignment.ALIGN_OPPOSITE)
+            // Label at the start side (right in Arabic), value at the end side.
+            val h1 = text(cc, k, labelP, if (Lang.ar) M + inner * 0.55f else M, y + 6f, inner * 0.45f, Layout.Alignment.ALIGN_NORMAL)
+            val h2 = text(cc, v, valueP, if (Lang.ar) M else M + inner * 0.45f, y + 6f, inner * 0.55f, Layout.Alignment.ALIGN_OPPOSITE)
             y += maxOf(h1, h2) + 12f
             cc.drawLine(M, y, W - M, y, lp)
         }
@@ -235,14 +241,15 @@ object Receipt {
             y += 16f
             val cols = doc.tableHeader.size.coerceAtLeast(doc.table.first().size)
             val colW = inner / cols
+            // Column 0 sits at the start side, like the rest of the page (right in Arabic).
+            fun colX(i: Int) = if (Lang.ar) W - M - (i + 1) * colW + 6f else M + i * colW + 6f
             val headP = paint(f.bold, 9.5f, Color.WHITE)
             val cellP = paint(f.regular, 9.5f, pine)
             fun header() {
                 val cc = c!!
                 cc.drawRect(M, y, W - M, y + 22f, Paint().apply { color = pine })
                 doc.tableHeader.forEachIndexed { i, h ->
-                    // Column 0 sits on the right, like the rest of the page.
-                    text(cc, h, headP, W - M - (i + 1) * colW + 6f, y + 5f, colW - 12f, Layout.Alignment.ALIGN_NORMAL)
+                    text(cc, h, headP, colX(i), y + 5f, colW - 12f, Layout.Alignment.ALIGN_NORMAL)
                 }
                 y += 22f
             }
@@ -254,7 +261,7 @@ object Receipt {
                 if (r % 2 == 1) cc.drawRect(M, y, W - M, y + 20f, Paint().apply { color = Color.rgb(0xF1, 0xF4, 0xEF) })
                 var rowH = 20f
                 row.forEachIndexed { i, cell ->
-                    val h = text(cc, cell, cellP, W - M - (i + 1) * colW + 6f, y + 4f, colW - 12f, Layout.Alignment.ALIGN_NORMAL)
+                    val h = text(cc, cell, cellP, colX(i), y + 4f, colW - 12f, Layout.Alignment.ALIGN_NORMAL)
                     rowH = maxOf(rowH, h + 8f)
                 }
                 y += rowH
@@ -290,7 +297,7 @@ object Receipt {
                 val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: return null
                 ctx.contentResolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
-                "التنزيلات ← Mizania"
+                tr("التنزيلات ← Mizania", "Downloads → Mizania")
             } else {
                 val dir = File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), "Mizania").apply { mkdirs() }
                 file.copyTo(File(dir, name), overwrite = true)
@@ -324,15 +331,15 @@ fun ReceiptButtons(label: String, fileName: String, build: (Context) -> Receipt.
         Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { Receipt.share(ctx, build(ctx), fileName) }, modifier = Modifier.weight(1f)) {
-                Text("مشاركة")
+                Text(tr("مشاركة", "Share"))
             }
             OutlinedButton(
                 onClick = {
                     val where = Receipt.save(ctx, build(ctx), fileName)
-                    Toast.makeText(ctx, if (where != null) "انحفظ الملف بـ $where" else "ما زبط الحفظ", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, if (where != null) tr("حُفظ الملف في $where", "Saved to $where") else tr("تعذّر الحفظ", "Couldn't save"), Toast.LENGTH_LONG).show()
                 },
                 modifier = Modifier.weight(1f),
-            ) { Text("حفظ على الجهاز") }
+            ) { Text(tr("حفظ على الجهاز", "Save to phone")) }
         }
     }
 }

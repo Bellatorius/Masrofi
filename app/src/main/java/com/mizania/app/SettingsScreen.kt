@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Switch
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -76,19 +78,20 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
     var dailySummary by remember { mutableStateOf(db.setting("daily_summary", "1") == "1") }
     var lockOn by remember { mutableStateOf(db.setting("lock", "0") == "1") }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    var langChoice by remember { mutableStateOf(Lang.choice(ctx)) }
 
     fun toast(msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
 
     val saveJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
-            try { Backup.write(ctx, uri, Backup.exportJson(db)); toast("انحفظت النسخة الاحتياطية") }
-            catch (e: Exception) { toast("ما زبط الحفظ") }
+            try { Backup.write(ctx, uri, Backup.exportJson(db)); toast(tr("حُفظت النسخة الاحتياطية", "Backup saved")) }
+            catch (e: Exception) { toast(tr("تعذّر الحفظ", "Couldn't save")) }
         }
     }
     val saveCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
-            try { Backup.write(ctx, uri, Backup.exportCsv(db)); toast("انحفظ ملف Excel (CSV)") }
-            catch (e: Exception) { toast("ما زبط الحفظ") }
+            try { Backup.write(ctx, uri, Backup.exportCsv(db)); toast(tr("حُفظ ملف Excel (CSV)", "Excel file (CSV) saved")) }
+            catch (e: Exception) { toast(tr("تعذّر الحفظ", "Couldn't save")) }
         }
     }
     val openJson = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -97,53 +100,95 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
 
     LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
-            Section("الحسابات") {
-                Text("كل حساب بيقرأ مسجات المرسلين اللي بتختارهم إله، وباقي المسجات بيتجاهلها.",
+            Section(tr("اللغة", "Language")) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        Lang.SYSTEM to tr("لغة الهاتف", "Phone language"),
+                        Lang.AR to "العربية",
+                        Lang.EN to "English",
+                    ).forEach { (code, name) ->
+                        FilterChip(langChoice == code, {
+                            if (langChoice != code) {
+                                langChoice = code
+                                Lang.set(ctx, code)
+                                Notifier.createChannels(ctx)
+                                AllowanceWidget.refreshAll(ctx)
+                                (ctx as? android.app.Activity)?.recreate()
+                            }
+                        }, { Text(name) })
+                    }
+                }
+            }
+        }
+        item {
+            Section(tr("الحسابات", "Accounts")) {
+                Text(tr("يقرأ كل حساب رسائل المرسلين الذين تختارهم له، ويتجاهل باقي الرسائل.",
+                    "Each account reads SMS from the senders you pick for it and ignores the rest."),
                     style = MaterialTheme.typography.bodySmall)
                 accounts.forEach { a ->
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(a.label, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { editAcc = a }) { Text("تعديل") }
+                            TextButton(onClick = { editAcc = a }) { Text(tr("تعديل", "Edit")) }
                         }
                         val mine = senderMap.filterValues { it == a.id }.keys
-                        if (mine.isEmpty()) Text("ما في مرسلين لسا", style = MaterialTheme.typography.bodySmall)
+                        if (mine.isEmpty()) Text(tr("لا يوجد مرسلون بعد", "No senders yet"), style = MaterialTheme.typography.bodySmall)
                         mine.forEach { s ->
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text("• $s", Modifier.weight(1f))
                                 IconButton(onClick = { db.removeSender(s); refresh() }) {
-                                    Icon(Icons.Filled.Delete, "حذف")
+                                    Icon(Icons.Filled.Delete, tr("حذف", "Delete"))
                                 }
                             }
                         }
-                        OutlinedButton(onClick = { pickFor = a }) { Text("اختيار مرسلين") }
+                        OutlinedButton(onClick = { pickFor = a }) { Text(tr("اختيار المرسلين", "Pick senders")) }
                     }
                     HorizontalDivider()
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { addingAcc = true }) { Text("إضافة حساب") }
+                Button(onClick = { addingAcc = true }) { Text(tr("إضافة حساب", "Add account")) }
             }
         }
         item {
-            Section("استيراد المسجات القديمة") {
-                Text("اختار من أي تاريخ لأي تاريخ. بيضيف حركات المرسلين المختارين بهالفترة، وما بيكرر اللي انضاف قبل.",
+            Section(tr("استيراد الرسائل القديمة", "Import old SMS")) {
+                Text(tr("اختر الفترة. يضيف التطبيق حركات المرسلين المختارين خلالها، دون تكرار ما أُضيف من قبل.",
+                    "Pick a date range. Transactions from your chosen senders in that range are added, without duplicating ones already there."),
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
+                // Quick ranges, all ending today; 0 = every SMS in the inbox.
+                val today = Period.day().from
+                val dayOfMonth = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                val presets = listOf(
+                    tr("آخر 30 يوماً", "Last 30 days") to Period.day(-29).from,
+                    tr("هذا الشهر", "This month") to Period.day(-(dayOfMonth - 1)).from,
+                    tr("من البداية", "From the beginning") to 0L,
+                )
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    presets.forEach { (label, from) ->
+                        FilterChip(importFrom == from && importTo == today, {
+                            importFrom = from; importTo = today
+                        }, { Text(label) })
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = { pickingRange = true }) {
-                        Text("${Period.dayMonthYear(importFrom)}  ←  ${Period.dayMonthYear(importTo)}", fontFamily = Ui.numbers)
+                        val fromText = if (importFrom == 0L) tr("من البداية", "From the beginning") else Period.dayMonthYear(importFrom)
+                        Text("$fromText  ${if (Lang.ar) "←" else "→"}  ${Period.dayMonthYear(importTo)}", fontFamily = Ui.numbers)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 Button(enabled = senders.isNotEmpty(), onClick = {
                     val n = Processor.importInbox(ctx, importFrom, importTo + Period.DAY)
-                    Toast.makeText(ctx, if (n > 0) "انضافت $n حركة" else "ما في حركات جديدة بهالفترة", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, if (n > 0) tr("أُضيفت ${txnsText(n)}", "Added ${txnsText(n)}") else tr("لا توجد حركات جديدة في هذه الفترة", "No new transactions in this range"), Toast.LENGTH_SHORT).show()
                     refresh()
-                }) { Text("استيراد") }
+                }) { Text(tr("استيراد", "Import")) }
             }
         }
         item {
-            Section("البنود والميزانية") {
+            Section(tr("البنود والميزانية", "Budget lines")) {
                 val total = cats.sumOf { it.budget }
                 cats.forEach { c ->
                     Row(
@@ -152,36 +197,39 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     ) {
                         Text(c.name, Modifier.weight(1f))
                         Text(
-                            (when (c.type) { Db.FIXED -> "ثابت"; Db.DAILY -> "يومي"; else -> "احتياط" }) + " · " + fmt(c.budget),
+                            (when (c.type) { Db.FIXED -> tr("ثابت", "Fixed"); Db.DAILY -> tr("يومي", "Daily"); else -> tr("احتياط", "Reserve") }) + " · " + fmt(c.budget),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
                 Text(
-                    "مجموع الميزانية ${fmt(total)}، والراتب المتوقع ${fmt(db.salary())}" +
-                        if (db.salary() - total != 0.0) " (فرق ${fmt(db.salary() - total)})" else "",
+                    tr("مجموع الميزانية ${fmt(total)}، والراتب المتوقع ${fmt(db.salary())}",
+                        "Budget total ${fmt(total)}, expected salary ${fmt(db.salary())}") +
+                        if (db.salary() - total != 0.0) tr(" (الفرق ${fmt(db.salary() - total)})", " (difference ${fmt(db.salary() - total)})") else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (total > db.salary()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { addingCat = true }) { Text("إضافة بند") }
+                OutlinedButton(onClick = { addingCat = true }) { Text(tr("إضافة بند", "Add line")) }
             }
         }
         if (ownNames.isNotEmpty()) item {
-            Section("أسماءك بالتحويلات") {
-                Text("التحويلات من وإلى هالأسماء بتنحسب بين حساباتك، مش صرف ولا دخل.",
+            Section(tr("أسماؤك في التحويلات", "Your names in transfers")) {
+                Text(tr("التحويلات من هذه الأسماء وإليها تُحتسب بين حساباتك، لا صرفاً ولا دخلاً.",
+                    "Transfers from and to these names count as moves between your own accounts, not spending or income."),
                     style = MaterialTheme.typography.bodySmall)
                 ownNames.forEach { n ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(n, Modifier.weight(1f))
-                        IconButton(onClick = { db.removeOwnName(n); refresh() }) { Icon(Icons.Filled.Delete, "حذف") }
+                        IconButton(onClick = { db.removeOwnName(n); refresh() }) { Icon(Icons.Filled.Delete, tr("حذف", "Delete")) }
                     }
                 }
             }
         }
         item {
-            Section("التصنيف التلقائي") {
-                Text("أي حركة اسم المحل فيها بيحتوي الكلمة، بتروح للبند لحالها. اضغط على قاعدة لتعدّلها.",
+            Section(tr("التصنيف التلقائي", "Auto-sorting")) {
+                Text(tr("أي حركة يحتوي اسم المتجر فيها على الكلمة تُصنَّف في البند تلقائياً. اضغط على قاعدة لتعديلها.",
+                    "Any transaction whose shop name contains the word goes to that line by itself. Tap a rule to edit it."),
                     style = MaterialTheme.typography.bodySmall)
                 rules.forEach { r ->
                     Row(
@@ -194,39 +242,41 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         IconButton(onClick = { db.deleteRule(r.id); refresh() }) {
-                            Icon(Icons.Filled.Delete, "حذف")
+                            Icon(Icons.Filled.Delete, tr("حذف", "Delete"))
                         }
                     }
                 }
-                OutlinedButton(onClick = { addingRule = true }, modifier = Modifier.padding(top = 6.dp)) { Text("إضافة قاعدة") }
+                OutlinedButton(onClick = { addingRule = true }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("إضافة قاعدة", "Add rule")) }
             }
         }
         item {
-            Section("عام") {
+            Section(tr("عام", "General")) {
                 OutlinedTextField(
-                    value = salary, onValueChange = { salary = it }, label = { Text("الراتب المتوقع (للتخطيط بس)") },
+                    value = salary, onValueChange = { salary = it }, label = { Text(tr("الراتب المتوقع (للتخطيط فقط)", "Expected salary (for planning only)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                Text("اللي بيظهر بالرئيسية هو الراتب الحقيقي من مسج «قيد راتب»، مش هالرقم.",
+                Text(tr("ما يظهر في الرئيسية هو الراتب الفعلي من رسالة «قيد راتب»، وليس هذا الرقم.",
+                    "Home shows the real salary from the bank's salary SMS, not this number."),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
-                Text("الشهر بيبلش", style = MaterialTheme.typography.titleSmall)
+                Text(tr("بداية الشهر", "The month starts"), style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                     FilterChip(bySalary, { bySalary = true; db.setSetting("cycle_mode", "salary"); refresh() },
-                        { Text("يوم ما ينزل الراتب") })
+                        { Text(tr("يوم وصول الراتب", "When salary arrives")) })
                     FilterChip(!bySalary, { bySalary = false; db.setSetting("cycle_mode", "day"); refresh() },
-                        { Text("بيوم ثابت") })
+                        { Text(tr("في يوم ثابت", "On a fixed day")) })
                 }
                 if (!bySalary) {
                     OutlinedTextField(
                         value = cycleDay, onValueChange = { cycleDay = it },
-                        label = { Text("يوم بداية الشهر (1-28)") },
+                        label = { Text(tr("يوم بداية الشهر (1-28)", "Start day of the month (1-28)")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
                 } else {
-                    Text("لما يوصل مسج الراتب، بيبلش شهر جديد لحاله. وقبل أول راتب، بيستخدم يوم ${db.cycleDay()} من الشهر.",
+                    Text(tr("عند وصول رسالة الراتب يبدأ شهر جديد تلقائياً. وقبل أول راتب يُستخدم اليوم ${db.cycleDay()} من الشهر.",
+                        "A new month starts by itself when the salary SMS arrives. Before the first salary, day ${db.cycleDay()} of the month is used."),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp))
                 }
@@ -235,34 +285,35 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     salary.replace(',', '.').toDoubleOrNull()?.let { db.setSetting("salary", it.toString()) }
                     cycleDay.toIntOrNull()?.let { db.setSetting("cycle_day", it.coerceIn(1, 28).toString()) }
                     cycleDay = db.cycleDay().toString()
-                    Toast.makeText(ctx, "انحفظ", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, tr("تم الحفظ", "Saved"), Toast.LENGTH_SHORT).show()
                     refresh()
-                }) { Text("حفظ") }
+                }) { Text(tr("حفظ", "Save")) }
             }
         }
         item {
-            Section("التنبيهات") {
+            Section(tr("التنبيهات", "Notifications")) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("ملخص يومي الساعة 10 بالليل")
-                        Text("قديش صرفت، وقديش مسموحلك بكرا", style = MaterialTheme.typography.bodySmall,
+                        Text(tr("ملخص يومي الساعة 10 مساءً", "Daily summary at 10 pm"))
+                        Text(tr("كم صرفت، وكم يتاح لك غداً", "What you spent, and what you can spend tomorrow"), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = dailySummary, onCheckedChange = {
                         dailySummary = it; db.setSetting("daily_summary", if (it) "1" else "0")
                     })
                 }
-                Text("تذكير الدفعات بيشتغل لكل بند حاطط إله «يوم الدفع» (من البنود فوق)، وبيوصلك قبل الموعد بيوم.",
+                Text(tr("يعمل تذكير الدفعات لكل بند حدّدت له «يوم الدفع» (من البنود أعلاه)، ويصلك قبل الموعد بيوم.",
+                    "Payment reminders work for every line with a “payment day” (set in Budget lines above) and arrive a day before."),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp))
             }
         }
         if (Build.VERSION.SDK_INT >= 28) item {
-            Section("الأمان") {
+            Section(tr("الأمان", "Security")) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("قفل التطبيق بالبصمة")
-                        Text("أو برمز قفل الموبايل", style = MaterialTheme.typography.bodySmall,
+                        Text(tr("قفل التطبيق بالبصمة", "Lock the app with fingerprint"))
+                        Text(tr("أو برمز قفل الهاتف", "or the phone's screen lock"), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = lockOn, onCheckedChange = {
@@ -272,27 +323,29 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
             }
         }
         item {
-            Section("نسخة احتياطية") {
-                Text("احفظ كل بياناتك بملف، وبتقدر ترجعها على نفس الموبايل أو على موبايل جديد.",
+            Section(tr("نسخة احتياطية", "Backup")) {
+                Text(tr("احفظ كل بياناتك في ملف، ويمكنك استرجاعها على الهاتف نفسه أو على هاتف جديد.",
+                    "Save all your data to a file; you can restore it on this phone or a new one."),
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { saveJson.launch(Backup.fileName("json")) }) { Text("حفظ نسخة احتياطية") }
+                Button(onClick = { saveJson.launch(Backup.fileName("json")) }) { Text(tr("حفظ نسخة احتياطية", "Save a backup")) }
                 OutlinedButton(onClick = { openJson.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }) {
-                    Text("استرجاع من نسخة")
+                    Text(tr("الاسترجاع من نسخة", "Restore from a backup"))
                 }
-                OutlinedButton(onClick = { saveCsv.launch(Backup.fileName("csv")) }) { Text("تصدير الحركات لـ Excel") }
+                OutlinedButton(onClick = { saveCsv.launch(Backup.fileName("csv")) }) { Text(tr("تصدير الحركات إلى Excel", "Export transactions to Excel")) }
             }
         }
         item {
-            Section("مسح البيانات") {
-                Text("الحركات المسجلة بس، أو كل شي والرجوع لأول ما نزّلت التطبيق.",
+            Section(tr("مسح البيانات", "Erase data")) {
+                Text(tr("الحركات المسجّلة فقط، أو كل شيء والعودة إلى حالة التطبيق عند تثبيته.",
+                    "Just the recorded transactions, or everything, back to how the app was when installed."),
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { confirmReset = 1 }) { Text("مسح كل الحركات") }
+                OutlinedButton(onClick = { confirmReset = 1 }) { Text(tr("مسح كل الحركات", "Erase all transactions")) }
                 Button(
                     onClick = { confirmReset = 2 },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                ) { Text("إرجاع التطبيق لأوله") }
+                ) { Text(tr("إعادة ضبط التطبيق", "Reset the app")) }
             }
         }
     }
@@ -307,33 +360,35 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
     restoreUri?.let { uri ->
         AlertDialog(
             onDismissRequest = { restoreUri = null },
-            title = { Text("استرجاع النسخة؟") },
-            text = { Text("رح تنمسح بياناتك الحالية وتنحط مكانها بيانات النسخة.") },
+            title = { Text(tr("استرجاع النسخة؟", "Restore this backup?")) },
+            text = { Text(tr("ستُحذف بياناتك الحالية وتحل محلها بيانات النسخة.", "Your current data will be replaced with the backup's data.")) },
             confirmButton = {
                 TextButton(onClick = {
                     try {
                         Backup.restoreJson(db, Backup.read(ctx, uri))
                         salary = db.setting("salary", "0"); cycleDay = db.cycleDay().toString()
-                        toast("رجعت البيانات ✓")
+                        toast(tr("استُرجعت البيانات ✓", "Data restored ✓"))
                     } catch (e: Exception) {
-                        toast("هاد الملف مش نسخة من ميزانيتي")
+                        toast(tr("هذا الملف ليس نسخة احتياطية من ميزانيتي", "This file isn't a My Budget backup"))
                     }
                     restoreUri = null
                     refresh()
-                }) { Text("استرجع", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("استرجاع", "Restore"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { restoreUri = null }) { Text("إلغاء") } },
+            dismissButton = { TextButton(onClick = { restoreUri = null }) { Text(tr("إلغاء", "Cancel")) } },
         )
     }
     if (confirmReset != 0) {
         val all = confirmReset == 2
         AlertDialog(
             onDismissRequest = { confirmReset = 0 },
-            title = { Text(if (all) "إرجاع التطبيق لأوله؟" else "مسح كل الحركات؟") },
+            title = { Text(if (all) tr("إعادة ضبط التطبيق؟", "Reset the app?") else tr("مسح كل الحركات؟", "Erase all transactions?")) },
             text = {
                 Text(
-                    if (all) "رح ينمسح كل شي: الحركات، والبنود، والحسابات، والديون، والتصنيف التلقائي، والإعدادات. وبترجع الميزانية الافتراضية."
-                    else "رح تنمسح كل الحركات المسجلة. البنود والحسابات والديون والتصنيف التلقائي بيضلوا. بتقدر بعدها تستورد مسجات هالشهر من جديد."
+                    if (all) tr("سيُحذف كل شيء: الحركات والبنود والحسابات والديون والتصنيف التلقائي والإعدادات، وتعود الميزانية الافتراضية.",
+                        "Everything will be erased: transactions, budget lines, accounts, debts, auto-sorting rules and settings. The default budget comes back.")
+                    else tr("ستُحذف كل الحركات المسجّلة، وتبقى البنود والحسابات والديون والتصنيف التلقائي. يمكنك بعدها استيراد رسائل هذا الشهر من جديد.",
+                        "All recorded transactions will be erased. Budget lines, accounts, debts and auto-sorting rules stay. You can import this month's SMS again afterwards.")
                 )
             },
             confirmButton = {
@@ -342,16 +397,16 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     salary = db.setting("salary", "0")
                     cycleDay = db.cycleDay().toString()
                     confirmReset = 0
-                    Toast.makeText(ctx, "انمسحت البيانات", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, tr("مُسحت البيانات", "Data erased"), Toast.LENGTH_SHORT).show()
                     refresh()
-                }) { Text("امسح", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("مسح", "Erase"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmReset = 0 }) { Text("إلغاء") } },
+            dismissButton = { TextButton(onClick = { confirmReset = 0 }) { Text(tr("إلغاء", "Cancel")) } },
         )
     }
     pickFor?.let { a -> SenderPickerDialog(db, a) { pickFor = null; refresh() } }
     editAcc?.let { a -> AccountDialog(db, a, a.name, canDelete = accounts.size > 1) { editAcc = null; refresh() } }
-    if (addingAcc) AccountDialog(db, null, "الحساب ${accounts.size + 1}", canDelete = false) { addingAcc = false; refresh() }
+    if (addingAcc) AccountDialog(db, null, tr("الحساب ${accounts.size + 1}", "Account ${accounts.size + 1}"), canDelete = false) { addingAcc = false; refresh() }
     editing?.let { c -> CategoryDialog(db, c) { editing = null; refresh() } }
     if (addingCat) CategoryDialog(db, null) { addingCat = false; refresh() }
 }
@@ -387,13 +442,13 @@ fun ImportRangeDialog(from: Long, to: Long, onDismiss: () -> Unit, onPick: (Long
                     val e = state.selectedEndDateMillis ?: s
                     onPick(toLocal(s), toLocal(e))
                 },
-            ) { Text("تم") }
+            ) { Text(tr("تم", "Done")) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("إلغاء", "Cancel")) } },
     ) {
         DateRangePicker(
             state = state,
-            title = { Text("فترة الاستيراد", Modifier.padding(start = 24.dp, top = 16.dp)) },
+            title = { Text(tr("فترة الاستيراد", "Import range"), Modifier.padding(start = 24.dp, top = 16.dp)) },
             modifier = Modifier.weight(1f),
         )
     }
@@ -408,20 +463,20 @@ fun RuleDialog(db: Db, rule: Rule?, onDone: () -> Unit) {
     val ok = db.validRuleKey(keyword) && cat != null
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (rule == null) "قاعدة جديدة" else "تعديل القاعدة") },
+        title = { Text(if (rule == null) tr("قاعدة جديدة", "New rule") else tr("تعديل القاعدة", "Edit rule")) },
         text = {
             Column {
                 OutlinedTextField(
                     value = keyword, onValueChange = { keyword = it }, singleLine = true,
-                    label = { Text("اسم المحل أو المزود") }, placeholder = { Text("مثلاً ZAIN أو CARREFOUR") },
+                    label = { Text(tr("اسم المتجر أو المزوّد", "Shop or provider name")) }, placeholder = { Text(tr("مثلاً ZAIN أو CARREFOUR", "e.g. ZAIN or CARREFOUR")) },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (keyword.isNotBlank() && !db.validRuleKey(keyword)) {
-                    Text("اكتب اسم المحل بس، مش نص المسج.", color = MaterialTheme.colorScheme.error,
+                    Text(tr("اكتب اسم المتجر فقط، لا نص الرسالة.", "Type just the shop name, not the SMS text."), color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("البند", style = MaterialTheme.typography.titleSmall)
+                Text(tr("البند", "Budget line"), style = MaterialTheme.typography.titleSmall)
                 CategoryChips(cats, cat) { cat = it }
             }
         },
@@ -431,8 +486,8 @@ fun RuleDialog(db: Db, rule: Rule?, onDone: () -> Unit) {
                 if (rule == null) db.addRule(keyword, c) else db.updateRule(rule.id, keyword, c)
                 db.applyRulesToPending()
                 onDone()
-            }) { Text("حفظ") }
+            }) { Text(tr("حفظ", "Save")) }
         },
-        dismissButton = { TextButton(onClick = onDone) { Text("إلغاء") } },
+        dismissButton = { TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) } },
     )
 }

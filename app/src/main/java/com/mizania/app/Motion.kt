@@ -46,7 +46,7 @@ fun AnimatedAmount(
     Row(verticalAlignment = Alignment.Bottom) {
         Text(sign + String.format(Locale.US, "%,.2f", shown), fontFamily = Ui.numbers, fontSize = size,
             fontWeight = weight, color = color, maxLines = 1)
-        Text(" د.أ", fontSize = size * 0.5f,
+        Text(" " + currency(), fontSize = size * 0.5f,
             color = if (color == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else color.copy(alpha = 0.8f),
             modifier = Modifier.padding(bottom = (size.value * 0.12f).dp))
     }

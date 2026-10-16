@@ -15,13 +15,13 @@ object Notifier {
     fun createChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CH_ASK, "حركات بدها تصنيف", NotificationManager.IMPORTANCE_HIGH)
+            NotificationChannel(CH_ASK, tr("حركات بحاجة إلى تصنيف", "Transactions to sort"), NotificationManager.IMPORTANCE_HIGH)
         )
         nm.createNotificationChannel(
-            NotificationChannel(CH_ALERT, "تنبيهات الميزانية", NotificationManager.IMPORTANCE_HIGH)
+            NotificationChannel(CH_ALERT, tr("تنبيهات الميزانية", "Budget alerts"), NotificationManager.IMPORTANCE_HIGH)
         )
         nm.createNotificationChannel(
-            NotificationChannel(CH_INFO, "حركات مسجلة", NotificationManager.IMPORTANCE_DEFAULT)
+            NotificationChannel(CH_INFO, tr("حركات مسجّلة", "Recorded transactions"), NotificationManager.IMPORTANCE_DEFAULT)
         )
     }
 
@@ -51,8 +51,8 @@ object Notifier {
 
     /** "Which budget does this belong to?" — tapping opens the classify screen. */
     fun ask(ctx: Context, txnId: Long, amount: Double, merchant: String) {
-        post(ctx, CH_ASK, txnId.toInt(), "لأي بند تابعة ${fmt(amount)}؟",
-            "$merchant — اضغط عشان تختار البند وتكتب ملاحظة", open(ctx, txnId.toInt(), txnId))
+        post(ctx, CH_ASK, txnId.toInt(), tr("إلى أي بند تتبع ${fmt(amount)}؟", "Which budget line is ${fmt(amount)} for?"),
+            tr("$merchant — اضغط لاختيار البند وإضافة ملاحظة", "$merchant — tap to pick a line and add a note"), open(ctx, txnId.toInt(), txnId))
     }
 
     fun cancel(ctx: Context, txnId: Long) {

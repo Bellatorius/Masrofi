@@ -49,13 +49,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 
-fun directionLabel(owedToMe: Boolean) = if (owedToMe) "إلي" else "عليّ"
+fun directionLabel(owedToMe: Boolean) = if (owedToMe) tr("لي", "Owed to me") else tr("عليّ", "I owe")
 
 fun entryLabel(d: Debt, kind: Int) = when {
-    kind == Db.PAY && d.owedToMe -> "رجعلي"
-    kind == Db.PAY -> "سددت"
-    d.owedToMe -> "أعطيته كمان"
-    else -> "استلفت كمان"
+    kind == Db.PAY && d.owedToMe -> tr("استرددت", "Paid back to me")
+    kind == Db.PAY -> tr("سدّدت", "I paid")
+    d.owedToMe -> tr("أقرضته المزيد", "Lent more")
+    else -> tr("اقترضت المزيد", "Borrowed more")
 }
 
 private fun parseAmount(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
@@ -71,18 +71,18 @@ fun DebtsScreen(db: Db, tick: Int, refresh: () -> Unit) {
 
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
         item {
-            Section("الملخص") {
-                KV("عليّ للناس", fmt(iOwe), color = MaterialTheme.colorScheme.error, bold = true)
-                KV("إلي عند الناس", fmt(owedMe), color = MaterialTheme.colorScheme.secondary, bold = true)
-                KV("الصافي", fmt(owedMe - iOwe))
+            Section(tr("الملخص", "Summary")) {
+                KV(tr("عليّ للآخرين", "I owe"), fmt(iOwe), color = MaterialTheme.colorScheme.error, bold = true)
+                KV(tr("لي عند الآخرين", "Owed to me"), fmt(owedMe), color = MaterialTheme.colorScheme.secondary, bold = true)
+                KV(tr("الصافي", "Net"), fmt(owedMe - iOwe))
             }
         }
         if (debts.isEmpty()) item {
-            Text("ما في ديون مسجلة. اضغط ➕ عشان تضيف دين إلك أو عليك.", Modifier.padding(24.dp))
+            Text(tr("لا توجد ديون مسجّلة. اضغط ➕ لإضافة دين لك أو عليك.", "No debts recorded. Tap ➕ to add money you owe or are owed."), Modifier.padding(24.dp))
         }
         items(active, key = { it.id }) { d -> DebtCard(d) { open = d.id } }
         if (done.isNotEmpty()) item {
-            Text("مسكّرة", Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+            Text(tr("المُسدَّدة", "Settled"), Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         items(done, key = { it.id }) { d -> DebtCard(d) { open = d.id } }
@@ -102,7 +102,7 @@ fun DebtCard(d: Debt, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.person, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    if (d.closed) "خلص ✓" else directionLabel(d.owedToMe),
+                    if (d.closed) tr("سُدِّد ✓", "Settled ✓") else directionLabel(d.owedToMe),
                     fontWeight = FontWeight.Bold,
                     color = when {
                         d.closed -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -111,9 +111,9 @@ fun DebtCard(d: Debt, onClick: () -> Unit) {
                     },
                 )
             }
-            KV("المبلغ الكلي", fmt(d.total))
-            KV(if (d.owedToMe) "رجعلي" else "سددت", fmt(d.paid))
-            KV("الباقي", fmt(max(0.0, d.remaining)), bold = true)
+            KV(tr("المبلغ الكلي", "Total"), fmt(d.total))
+            KV(if (d.owedToMe) tr("استرددت", "Paid back") else tr("سدّدت", "Paid"), fmt(d.paid))
+            KV(tr("المتبقي", "Remaining"), fmt(max(0.0, d.remaining)), bold = true)
             if (d.total > 0) {
                 LinearProgressIndicator(
                     progress = { (d.paid / d.total).toFloat().coerceIn(0f, 1f) },
@@ -142,27 +142,27 @@ fun DebtFormDialog(db: Db, debt: Debt?, onDone: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (debt == null) "دين جديد" else "تعديل الدين") },
+        title = { Text(if (debt == null) tr("دين جديد", "New debt") else tr("تعديل الدين", "Edit debt")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text("مين الشخص") },
+                OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text(tr("اسم الشخص", "Person")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                Text("الدين", fontWeight = FontWeight.SemiBold)
+                Text(tr("الدين", "Debt"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(!owedToMe, { owedToMe = false }, { Text("عليّ (أنا مستلف)") })
-                    FilterChip(owedToMe, { owedToMe = true }, { Text("إلي (أنا مسلّف)") })
+                    FilterChip(!owedToMe, { owedToMe = false }, { Text(tr("عليّ (أنا المقترض)", "I owe (I borrowed)")) })
+                    FilterChip(owedToMe, { owedToMe = true }, { Text(tr("لي (أنا المُقرض)", "Owed to me (I lent)")) })
                 }
                 OutlinedTextField(
-                    value = amount, onValueChange = { amount = it }, label = { Text("المبلغ الأصلي") },
+                    value = amount, onValueChange = { amount = it }, label = { Text(tr("المبلغ الأصلي", "Original amount")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("ملاحظة (اختياري)") },
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text(tr("ملاحظة (اختياري)", "Note (optional)")) },
                     modifier = Modifier.fillMaxWidth())
                 if (confirmDelete) {
-                    Text("متأكد؟ رح ينمسح الدين وكل دفعاته.", color = MaterialTheme.colorScheme.error,
+                    Text(tr("هل أنت متأكد؟ سيُحذف الدين وكل دفعاته.", "Are you sure? The debt and all its payments will be deleted."), color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 8.dp))
                 }
             }
@@ -174,16 +174,16 @@ fun DebtFormDialog(db: Db, debt: Debt?, onDone: () -> Unit) {
                     db.saveDebt(debt?.id ?: 0, person.trim(), owedToMe, value ?: 0.0, note.trim())
                     onDone()
                 },
-            ) { Text("حفظ") }
+            ) { Text(tr("حفظ", "Save")) }
         },
         dismissButton = {
             Row {
                 if (debt != null) {
                     TextButton(onClick = {
                         if (confirmDelete) { db.deleteDebt(debt.id); onDone() } else confirmDelete = true
-                    }) { Text(if (confirmDelete) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error) }
                 }
-                TextButton(onClick = onDone) { Text("إلغاء") }
+                TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) }
             }
         },
     )
@@ -216,7 +216,7 @@ fun DebtDialog(db: Db, id: Long, onDone: () -> Unit) {
         val v = parseAmount(amount)
         if (v != null && v > 0) {
             db.addDebtEntry(d.id, kind, v, System.currentTimeMillis(), note.trim(), null)
-            android.widget.Toast.makeText(ctx, "انسجلت: ${entryLabel(d, kind)} ${fmt(v)}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(ctx, tr("سُجّلت: ", "Recorded: ") + "${entryLabel(d, kind)} ${fmt(v)}", android.widget.Toast.LENGTH_SHORT).show()
             amount = ""; note = ""; saved = true
         }
         return saved
@@ -232,69 +232,69 @@ fun DebtDialog(db: Db, id: Long, onDone: () -> Unit) {
         title = { Text("${d.person} — ${directionLabel(d.owedToMe)}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                KV("المبلغ الأصلي", fmt(d.amount))
-                if (d.added > 0) KV("زيادات", fmt(d.added))
-                KV(if (d.owedToMe) "رجعلي" else "سددت", fmt(d.paid))
-                KV("الباقي", fmt(max(0.0, d.remaining)), bold = true,
+                KV(tr("المبلغ الأصلي", "Original amount"), fmt(d.amount))
+                if (d.added > 0) KV(tr("زيادات", "Added"), fmt(d.added))
+                KV(if (d.owedToMe) tr("استرددت", "Paid back") else tr("سدّدت", "Paid"), fmt(d.paid))
+                KV(tr("المتبقي", "Remaining"), fmt(max(0.0, d.remaining)), bold = true,
                     color = if (d.closed) MaterialTheme.colorScheme.secondary else Color0)
                 if (fixing) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = fixValue, onValueChange = { fixValue = it }, singleLine = true,
-                            label = { Text(if (d.owedToMe) "رجعلي لحد هلأ" else "سددت لحد هلأ") }, modifier = Modifier.weight(1f),
+                            label = { Text(if (d.owedToMe) tr("ما استرددته حتى الآن", "Paid back so far") else tr("ما سدّدته حتى الآن", "Paid so far")) }, modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         )
                         TextButton(enabled = parseAmount(fixValue) != null, onClick = {
                             db.setDebtPaid(d.id, parseAmount(fixValue) ?: 0.0); fixing = false; local++
-                        }) { Text("حفظ") }
+                        }) { Text(tr("حفظ", "Save")) }
                     }
-                    Text("بيتسجل كـ«تعديل»، مش كدفعة جديدة.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("يُسجَّل كـ«تعديل»، لا كدفعة جديدة.", "Recorded as a “correction”, not a new payment."), style = MaterialTheme.typography.bodySmall)
                 } else {
                     TextButton(onClick = {
                         fixing = true
                         fixValue = if (d.paid % 1.0 == 0.0) d.paid.toLong().toString() else d.paid.toString()
-                    }) { Text(if (d.owedToMe) "تعديل اللي رجعلي" else "تعديل المسدد") }
+                    }) { Text(if (d.owedToMe) tr("تعديل المبلغ المسترد", "Fix amount paid back") else tr("تعديل المبلغ المسدَّد", "Fix amount paid")) }
                 }
                 if (d.note.isNotBlank()) Text(d.note, style = MaterialTheme.typography.bodySmall)
-                ReceiptButtons("كشف الدين (PDF)", "debt-${d.id}.pdf") { Receipt.forDebt(it, d.id) }
+                ReceiptButtons(tr("كشف الدين (PDF)", "Debt statement (PDF)"), "debt-${d.id}.pdf") { Receipt.forDebt(it, d.id) }
 
                 Spacer(Modifier.height(12.dp))
-                Text("دفعة جديدة", fontWeight = FontWeight.SemiBold)
+                Text(tr("دفعة جديدة", "New payment"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(kind == Db.PAY, { kind = Db.PAY }, { Text(entryLabel(d, Db.PAY)) })
                     FilterChip(kind == Db.ADD, { kind = Db.ADD }, { Text(entryLabel(d, Db.ADD)) })
                 }
                 OutlinedTextField(
-                    value = amount, onValueChange = { amount = it }, label = { Text("المبلغ") },
+                    value = amount, onValueChange = { amount = it }, label = { Text(tr("المبلغ", "Amount")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("ملاحظة (اختياري)") },
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text(tr("ملاحظة (اختياري)", "Note (optional)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Button(
                     enabled = value != null && value > 0,
                     onClick = { savePending(); local++ },
                     modifier = Modifier.padding(top = 6.dp),
-                ) { Text("سجّل الدفعة") }
+                ) { Text(tr("تسجيل الدفعة", "Record payment")) }
 
                 if (entries.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
-                    Text("السجل", fontWeight = FontWeight.SemiBold)
+                    Text(tr("السجل", "History"), fontWeight = FontWeight.SemiBold)
                     entries.forEach { e ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (e.note == Db.CORRECTION) "تعديل " + (if (e.amount >= 0) "+" else "−") + fmt(kotlin.math.abs(e.amount))
+                                    if (e.note == Db.CORRECTION) tr("تعديل ", "Correction ") + (if (e.amount >= 0) "+" else "−") + fmt(kotlin.math.abs(e.amount))
                                     else "${entryLabel(d, e.kind)} ${fmt(e.amount)}"
                                 )
                                 Text(
-                                    Period.stamp(e.time) + (if (e.txnId != null) " · من البنك" else "") +
+                                    Period.stamp(e.time) + (if (e.txnId != null) tr(" · من البنك", " · from bank") else "") +
                                         (if (e.note.isNotBlank() && e.note != Db.CORRECTION) " · ${e.note}" else ""),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
                             IconButton(onClick = { db.deleteDebtEntry(e.id); local++ }) {
-                                Icon(Icons.Filled.Delete, "حذف")
+                                Icon(Icons.Filled.Delete, tr("حذف", "Delete"))
                             }
                         }
                         HorizontalDivider()
@@ -304,14 +304,14 @@ fun DebtDialog(db: Db, id: Long, onDone: () -> Unit) {
         },
         confirmButton = {
             val pending = (value != null && value > 0) || (fixing && parseAmount(fixValue) != null)
-            TextButton(onClick = { savePending(); onDone() }) { Text(if (pending) "حفظ وإغلاق" else "تم") }
+            TextButton(onClick = { savePending(); onDone() }) { Text(if (pending) tr("حفظ وإغلاق", "Save and close") else tr("تم", "Done")) }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = {
                     if (confirmDelete) { db.deleteDebt(d.id); onDone() } else confirmDelete = true
-                }) { Text(if (confirmDelete) "أكيد احذف" else "حذف الدين", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = { editing = true }) { Text("تعديل") }
+                }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف الدين", "Delete debt"), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { editing = true }) { Text(tr("تعديل", "Edit")) }
             }
         },
     )

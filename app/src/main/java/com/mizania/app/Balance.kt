@@ -54,8 +54,9 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
         accounts.filter { a -> balances.none { it.accountId == a.id } }.map { it.id to "" }
 
     SheetFrame(onDone) {
-        Text("رصيدك", style = MaterialTheme.typography.titleLarge)
-        Text("آخر رصيد وصل بمسج البنك لكل حساب. إذا مسج ما فيه رصيد، بنطرح أو بنضيف مبلغه على آخر رصيد معروف.",
+        Text(tr("رصيدك", "Your balance"), style = MaterialTheme.typography.titleLarge)
+        Text(tr("آخر رصيد وصل في رسالة البنك لكل حساب. إذا لم تتضمن الرسالة رصيداً، نطرح مبلغها من آخر رصيد معروف أو نضيفه إليه.",
+            "The last balance your bank sent for each account. When an SMS has no balance, its amount is added to or taken from the last known one."),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
 
@@ -67,14 +68,14 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            (acc?.name ?: "حساب") + if (key.second.isNotEmpty()) "  ${key.second}" else "",
+                            (acc?.name ?: tr("حساب", "Account")) + if (key.second.isNotEmpty()) "  ${key.second}" else "",
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Text(
                             when {
-                                b?.balance == null -> "البنك ما بعت رصيد لهالحساب لسا"
-                                b.estimated -> "تقدير: آخر رصيد ${Period.stamp(b.asOf ?: 0)} والحركات بعده"
-                                else -> "حسب آخر مسج ${Period.stamp(b.asOf ?: 0)}"
+                                b?.balance == null -> tr("لم يرسل البنك رصيداً لهذا الحساب بعد", "The bank hasn't sent a balance for this account yet")
+                                b.estimated -> tr("تقدير: آخر رصيد ${Period.stamp(b.asOf ?: 0)} والحركات بعده", "Estimate: last balance ${Period.stamp(b.asOf ?: 0)} plus movements since")
+                                else -> tr("حسب آخر رسالة ${Period.stamp(b.asOf ?: 0)}", "From the last SMS ${Period.stamp(b.asOf ?: 0)}")
                             },
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -88,7 +89,7 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         OutlinedTextField(
                             value = value, onValueChange = { value = it }, singleLine = true,
-                            placeholder = { Text("الرصيد هلأ") }, suffix = { Text("د.أ") },
+                            placeholder = { Text(tr("الرصيد الآن", "Balance now")) }, suffix = { Text(currency()) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
                         )
@@ -100,19 +101,19 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
                                 AllowanceWidget.refreshAll(ctx)
                                 editing = null; value = ""; local++
                             },
-                        ) { Text("حفظ") }
+                        ) { Text(tr("حفظ", "Save")) }
                     }
                 } else {
                     Row {
                         TextButton(onClick = { editing = key; value = "" }) {
-                            Text(if (b?.balance == null) "أدخل الرصيد" else "تعديل الرصيد")
+                            Text(if (b?.balance == null) tr("إدخال الرصيد", "Enter balance") else tr("تعديل الرصيد", "Edit balance"))
                         }
                         val excluded = db.isExcluded(key.first, key.second)
                         TextButton(onClick = {
                             db.setExcluded(key.first, key.second, !excluded)
                             AllowanceWidget.refreshAll(ctx); local++
                         }) {
-                            Text(if (excluded) "رجّعه للمجموع" else "ما تحسبه بالمجموع",
+                            Text(if (excluded) tr("أعِده إلى المجموع", "Count it in the total") else tr("لا تحسبه في المجموع", "Leave out of the total"),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -122,14 +123,14 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
 
         if (now.balance != null) {
             Spacer(Modifier.height(12.dp))
-            Text("كيف بنحسب «مسموحلك اليوم»", style = MaterialTheme.typography.titleSmall)
+            Text(tr("كيف نحسب «المتاح لك اليوم»", "How “You can spend today” is worked out"), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(6.dp))
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer).padding(14.dp)
             ) {
-                KV("رصيدك", fmt(now.balance))
-                Text("محجوز لهالشهر (أشّر على اللي دفعته):", style = MaterialTheme.typography.bodySmall,
+                KV(tr("رصيدك", "Balance"), fmt(now.balance))
+                Text(tr("محجوز لهذا الشهر (علّم ما دفعته):", "Set aside this month (tick what you've paid):"), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 cats.filter { it.type == Db.FIXED || it.type == Db.RESERVE }.forEach { c ->
                     val left = max(0.0, c.budget - (spent[c.id] ?: 0.0))
@@ -145,21 +146,22 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
                         })
                         Text("${c.icon} ${c.name}", Modifier.weight(1f),
                             color = if (paid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-                        Text(if (paid) "دفعته" else "− " + fmt(left), fontFamily = Ui.numbers,
+                        Text(if (paid) tr("دُفع", "Paid") else "− " + fmt(left), fontFamily = Ui.numbers,
                             color = if (paid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp), color = Ui.p.line)
-                KV("بتقدر تصرف", fmt(now.spendable ?: 0.0), bold = true,
+                KV(tr("يمكنك صرف", "You can spend"), fmt(now.spendable ?: 0.0), bold = true,
                     color = if ((now.spendable ?: 0.0) < 0) Ui.p.pomegranate else Ui.p.mint)
-                KV("÷ الأيام لحد الراتب", "${now.daysLeft}")
-                KV("= مسموحلك باليوم", fmt(now.allowance), bold = true)
+                KV(tr("÷ الأيام حتى الراتب", "÷ Days until salary"), "${now.daysLeft}")
+                KV(tr("= المتاح لك يومياً", "= Per day"), fmt(now.allowance), bold = true)
             }
-            Text("الفاتورة بتنشال من الحجز لحالها لما تصنف دفعتها على بندها، أو لما تأشر عليها هون. ولما ينزل الراتب، الحساب بيبلش من جديد.",
+            Text(tr("تُزال الفاتورة من المبلغ المحجوز تلقائياً عند تصنيف دفعتها على بندها، أو عند تعليمها هنا. وعند وصول الراتب يبدأ الحساب من جديد.",
+                "A bill leaves the set-aside amount by itself once you book its payment under its line, or tick it here. When salary arrives, it all starts again."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp))
         }
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("تم", fontWeight = FontWeight.SemiBold) }
+        TextButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text(tr("تم", "Done"), fontWeight = FontWeight.SemiBold) }
     }
 }

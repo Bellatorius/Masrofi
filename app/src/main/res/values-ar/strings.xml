@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ميزانيتي</string>
+    <string name="widget_title">المتاح لك اليوم</string>
+    <string name="widget_desc">المبلغ المتاح لك للصرف اليوم</string>
+</resources>

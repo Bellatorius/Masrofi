@@ -107,7 +107,7 @@ fun TriageScreen(db: Db, onOpenDetails: (Long) -> Unit, onClose: () -> Unit) {
             is Link.Debt -> db.syncLinks(t.id, debtId = link.id)
             is Link.Jam -> db.syncLinks(t.id, jamiyaId = link.id)
         }
-        confirm = db.linkSummary(t.id) ?: "انحسبت على «${c.name}»"
+        confirm = db.linkSummary(t.id) ?: tr("احتُسبت على «${c.name}»", "Booked under “${c.name}”")
         history += Done(t.id, null, false, c.name)
         queue.remove(t)
         // The new rule may have booked others from the same shop: drop them from the queue too.
@@ -122,7 +122,7 @@ fun TriageScreen(db: Db, onOpenDetails: (Long) -> Unit, onClose: () -> Unit) {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         db.ignoreTxn(t.id)
         Notifier.cancel(ctx, t.id)
-        history += Done(t.id, null, true, "تجاهل")
+        history += Done(t.id, null, true, tr("تجاهل", "Ignored"))
         queue.remove(t)
         tick++
     }
@@ -145,14 +145,14 @@ fun TriageScreen(db: Db, onOpenDetails: (Long) -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         // Top bar: close, progress.
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "إغلاق") }
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, tr("إغلاق", "Close")) }
             Column(Modifier.weight(1f)) {
-                Text("صنّف بسرعة", style = MaterialTheme.typography.titleMedium)
-                Text("${total - queue.size} من $total", fontFamily = Ui.numbers, fontSize = 12.sp,
+                Text(tr("صنّف بسرعة", "Quick sort"), style = MaterialTheme.typography.titleMedium)
+                Text(tr("${total - queue.size} من $total", "${total - queue.size} of $total"), fontFamily = Ui.numbers, fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             AnimatedVisibility(history.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                TextButton(onClick = { undo() }) { Text("تراجع") }
+                TextButton(onClick = { undo() }) { Text(tr("تراجع", "Undo")) }
             }
         }
         val done = if (total == 0) 1f else (total - queue.size).toFloat() / total
@@ -179,7 +179,7 @@ fun TriageScreen(db: Db, onOpenDetails: (Long) -> Unit, onClose: () -> Unit) {
             } else {
                 Column(Modifier.fillMaxSize()) {
                     TxnCard(t, onDetails = { onOpenDetails(t.id) })
-                    Text("لأي بند؟", style = MaterialTheme.typography.titleSmall,
+                    Text(tr("إلى أي بند؟", "Which budget line?"), style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp))
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
@@ -197,14 +197,14 @@ fun TriageScreen(db: Db, onOpenDetails: (Long) -> Unit, onClose: () -> Unit) {
                     ) {
                         if (t.merchant.isNotBlank() && db.validRuleKey(t.merchant)) {
                             Checkbox(checked = learn, onCheckedChange = { learn = it })
-                            Text("تذكّر «${t.merchant}» للمرات الجاية", Modifier.weight(1f), maxLines = 2,
+                            Text(tr("تذكّر «${t.merchant}» في المرات القادمة", "Remember “${t.merchant}” next time"), Modifier.weight(1f), maxLines = 2,
                                 overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface)
                         } else {
                             Spacer(Modifier.weight(1f))
                         }
-                        TextButton(onClick = { queue.remove(t); queue.add(t); tick++ }) { Text("بعدين") }
-                        TextButton(onClick = { ignore(t) }) { Text("مش مصروف", color = p.pomegranate) }
+                        TextButton(onClick = { queue.remove(t); queue.add(t); tick++ }) { Text(tr("لاحقاً", "Later")) }
+                        TextButton(onClick = { ignore(t) }) { Text(tr("ليس مصروفاً", "Not spending"), color = p.pomegranate) }
                     }
                 }
             }
@@ -241,15 +241,20 @@ fun LinkPicker(db: Db, t: Txn, c: Category, onPick: (Link) -> Unit, onCancel: ()
     data class Opt(val link: Link, val title: String, val sub: String)
     val (title, empty, opts) = remember(t.id, c.id) {
         when {
-            db.isSavings(c) -> Triple("لأي هدف ادخار؟", "ما عندك أهداف ادخار. اعمل هدف من «أموالي ← الادخار».",
-                db.goals().map { Opt(Link.Goal(it.id), "${it.icon}  ${it.name}", "جمعت ${fmt(it.saved)} من ${fmt(it.target)}") })
-            db.isDebtLine(c) -> Triple("على أي دين؟", "ما في دين مسجّل عليك. ضيفه من «أموالي ← الديون».",
-                db.openDebtsIOwe().map { Opt(Link.Debt(it.id), it.person, "باقي عليك ${fmt(it.remaining)}") })
-            else -> Triple("أي جمعية؟", "ما في جمعية مسجّلة. ضيفها من «أموالي ← الجمعية».",
+            db.isSavings(c) -> Triple(tr("لأي هدف ادخار؟", "Which savings goal?"),
+                tr("لا توجد لديك أهداف ادخار. أنشئ هدفاً من «أموالي ← الادخار».", "You have no savings goals. Create one in “My money → Savings”."),
+                db.goals().map { Opt(Link.Goal(it.id), "${it.icon}  ${it.name}",
+                    tr("جمعت ${fmt(it.saved)} من ${fmt(it.target)}", "Saved ${fmt(it.saved)} of ${fmt(it.target)}")) })
+            db.isDebtLine(c) -> Triple(tr("لأي دين؟", "Which debt?"),
+                tr("لا يوجد دين مسجّل عليك. أضفه من «أموالي ← الديون».", "You have no debts recorded. Add one in “My money → Debts”."),
+                db.openDebtsIOwe().map { Opt(Link.Debt(it.id), it.person, tr("المتبقي عليك ${fmt(it.remaining)}", "${fmt(it.remaining)} left to pay")) })
+            else -> Triple(tr("أي جمعية؟", "Which jamiya?"),
+                tr("لا توجد جمعية مسجّلة. أضفها من «أموالي ← الجمعية».", "No jamiya recorded. Add one in “My money → Jamiya”."),
                 db.jamiyas().map { j ->
                     val i = JamiyaMonths.indexAt(j, t.time)
                     Opt(Link.Jam(j.id), "🤝  ${j.name}",
-                        if (i in 0 until j.months) "رح يتعلّم شهر ${JamiyaMonths.label(j, i)} مدفوع" else "تاريخ الحركة برا أشهرها")
+                        if (i in 0 until j.months) tr("سيُسجَّل شهر ${JamiyaMonths.label(j, i)} مدفوعاً", "${JamiyaMonths.label(j, i)} will be marked paid")
+                        else tr("تاريخ الحركة خارج أشهرها", "This date is outside its months"))
                 })
         }
     }
@@ -258,7 +263,7 @@ fun LinkPicker(db: Db, t: Txn, c: Category, onPick: (Link) -> Unit, onCancel: ()
         title = { Text(title) },
         text = {
             Column {
-                Text("${fmt(t.amount)}، ${t.merchant.ifEmpty { t.kind }}", style = MaterialTheme.typography.bodyMedium,
+                Text(fmt(t.amount) + tr("، ", ", ") + t.title, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(10.dp))
                 if (opts.isEmpty()) Text(empty, style = MaterialTheme.typography.bodyMedium)
@@ -274,8 +279,8 @@ fun LinkPicker(db: Db, t: Txn, c: Category, onPick: (Link) -> Unit, onCancel: ()
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(Link.None) }) { Text("صنّفها بدون ربط") } },
-        dismissButton = { TextButton(onClick = onCancel) { Text("إلغاء") } },
+        confirmButton = { TextButton(onClick = { onPick(Link.None) }) { Text(tr("صنّفها دون ربط", "Book it without linking")) } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(tr("إلغاء", "Cancel")) } },
     )
 }
 
@@ -287,14 +292,14 @@ private fun TxnCard(t: Txn, onDetails: () -> Unit) {
             .clickable(onClick = onDetails).padding(22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(t.kind + "، " + Period.stamp(t.time), color = p.onPine.copy(alpha = 0.78f),
+        Text(t.kindText + tr("، ", ", ") + Period.stamp(t.time), color = p.onPine.copy(alpha = 0.78f),
             style = MaterialTheme.typography.bodySmall, fontFamily = Ui.numbers)
         Spacer(Modifier.height(6.dp))
         Amount(t.amount, 44.sp, p.dinar, weight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text(t.merchant.ifEmpty { t.kind }, color = p.onPine, style = MaterialTheme.typography.titleMedium,
+        Text(t.title, color = p.onPine, style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text("اضغط للتفاصيل والملاحظة", color = p.onPine.copy(alpha = 0.78f), fontSize = 12.sp,
+        Text(tr("اضغط للتفاصيل والملاحظة", "Tap for details and a note"), color = p.onPine.copy(alpha = 0.78f), fontSize = 12.sp,
             modifier = Modifier.padding(top = 6.dp))
     }
 }
@@ -334,10 +339,10 @@ private fun AllDone(onClose: () -> Unit) {
             ) { Text("✓", fontSize = 44.sp, color = Ui.p.mint) }
         }
         Spacer(Modifier.height(16.dp))
-        Text("كل شي مصنّف", style = MaterialTheme.typography.headlineSmall)
-        Text("الميزانية والمسموح اليوم صاروا محسوبين صح.", color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(tr("كل شيء مصنّف", "All sorted"), style = MaterialTheme.typography.headlineSmall)
+        Text(tr("أصبحت الميزانية والمتاح اليوم محسوبَين بدقة.", "Your budget and today's allowance are now accurate."), color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(24.dp))
-        androidx.compose.material3.Button(onClick = onClose, shape = RoundedCornerShape(16.dp)) { Text("رجوع للرئيسية") }
+        androidx.compose.material3.Button(onClick = onClose, shape = RoundedCornerShape(16.dp)) { Text(tr("العودة إلى الرئيسية", "Back to home")) }
     }
 }

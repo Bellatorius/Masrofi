@@ -74,7 +74,7 @@ fun MoneyScreen(db: Db, tick: Int, refresh: () -> Unit) {
     var adding by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Segmented(listOf("الديون", "الادخار", "الجمعية"), sub) { sub = it }
+            Segmented(listOf(tr("الديون", "Debts"), tr("الادخار", "Savings"), tr("الجمعية", "Jamiya")), sub) { sub = it }
             Box(Modifier.weight(1f)) {
                 when (sub) {
                     0 -> DebtsScreen(db, tick, refresh)
@@ -87,7 +87,7 @@ fun MoneyScreen(db: Db, tick: Int, refresh: () -> Unit) {
             onClick = { adding = true },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
             containerColor = Ui.p.pine, contentColor = Ui.p.onPine,
-        ) { Icon(Icons.Filled.Add, "إضافة") }
+        ) { Icon(Icons.Filled.Add, tr("إضافة", "Add")) }
     }
     if (adding) {
         val done = { adding = false; refresh() }
@@ -112,9 +112,10 @@ fun GoalsScreen(db: Db, tick: Int, refresh: () -> Unit) {
     var open by remember { mutableStateOf<Goal?>(null) }
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
         if (unlinked.isNotEmpty()) item {
-            Section("مدخرات مش بأي هدف") {
-                Text("صنّفت ${unlinked.size} حركة على الادخار بمجموع ${fmt(unlinked.sumOf { it.amount })}. " +
-                    if (goals.isEmpty()) "اعمل هدف وبتقدر تحطها فيه." else "حطها بهدف:",
+            Section(tr("مدخرات غير مرتبطة بهدف", "Savings not in a goal")) {
+                Text(tr("صنّفت ${txnsText(unlinked.size)} على الادخار بمجموع ${fmt(unlinked.sumOf { it.amount })}. ",
+                    "You put ${txnsText(unlinked.size)} under savings, totalling ${fmt(unlinked.sumOf { it.amount })}. ") +
+                    if (goals.isEmpty()) tr("أنشئ هدفاً لتضيفها إليه.", "Create a goal to put them in.") else tr("أضفها إلى هدف:", "Put them in a goal:"),
                     style = MaterialTheme.typography.bodyMedium)
                 if (goals.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
@@ -129,11 +130,12 @@ fun GoalsScreen(db: Db, tick: Int, refresh: () -> Unit) {
             }
         }
         if (goals.isEmpty()) item {
-            Text("حط هدف ادخار (مثلاً «عيد الأضحى 500 د.أ») وتابع قديش جمعت. اضغط ➕.", Modifier.padding(24.dp))
+            Text(tr("حدّد هدف ادخار (مثلاً «عيد الأضحى 500 د.أ») وتابع ما جمعته. اضغط ➕.",
+                "Set a savings goal (e.g. “Eid 500 JOD”) and track how much you've saved. Tap ➕."), Modifier.padding(24.dp))
         } else item {
-            Section("المجموع") {
-                KV("جمعت", fmt(goals.sumOf { it.saved }), bold = true, color = MaterialTheme.colorScheme.secondary)
-                KV("من أصل", fmt(goals.sumOf { it.target }))
+            Section(tr("المجموع", "Total")) {
+                KV(tr("جمعت", "Saved"), fmt(goals.sumOf { it.saved }), bold = true, color = MaterialTheme.colorScheme.secondary)
+                KV(tr("من أصل", "Out of"), fmt(goals.sumOf { it.target }))
             }
         }
         items(goals, key = { it.id }) { g ->
@@ -148,7 +150,7 @@ fun GoalsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                         IconBadge(g.icon, MaterialTheme.colorScheme.secondary, 44.dp)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(g.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Text("${fmt(g.saved)} من ${fmt(g.target)}", style = MaterialTheme.typography.bodySmall)
+                            Text(tr("${fmt(g.saved)} من ${fmt(g.target)}", "${fmt(g.saved)} of ${fmt(g.target)}"), style = MaterialTheme.typography.bodySmall)
                         }
                         Text("${(p * 100).toInt()}%", fontWeight = FontWeight.Bold, fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.secondary)
@@ -161,10 +163,10 @@ fun GoalsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     )
                     val left = g.target - g.saved
                     if (left <= 0) {
-                        Text("وصلت للهدف 🎉", Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.secondary)
+                        Text(tr("وصلت إلى الهدف 🎉", "Goal reached 🎉"), Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.secondary)
                     } else if (g.deadline != null) {
                         val m = monthsUntil(g.deadline)
-                        Text("باقي $m شهر — لازم تحط ${fmt(left / m)} بالشهر",
+                        Text(tr("متبقٍ ${monthsText(m)} — تحتاج إلى ادخار ${fmt(left / m)} شهرياً", "${monthsText(m)} left — put aside ${fmt(left / m)} a month"),
                             Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -192,7 +194,7 @@ fun GoalDialog(db: Db, goal: Goal, onDone: () -> Unit) {
         val x = amountOf(amount)
         if (x != null && x > 0) {
             db.addToGoal(g.id, x)
-            android.widget.Toast.makeText(ctx, "انضاف ${fmt(x)} على ${g.name}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(ctx, tr("أُضيف ${fmt(x)} إلى ${g.name}", "Added ${fmt(x)} to ${g.name}"), android.widget.Toast.LENGTH_SHORT).show()
             amount = ""
         }
     }
@@ -205,81 +207,81 @@ fun GoalDialog(db: Db, goal: Goal, onDone: () -> Unit) {
         title = { Text("${g.icon} ${g.name}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                KV("جمعت", fmt(g.saved), bold = true)
-                KV("الهدف", fmt(g.target))
-                KV("باقي", fmt(max(0.0, g.target - g.saved)))
+                KV(tr("جمعت", "Saved"), fmt(g.saved), bold = true)
+                KV(tr("الهدف", "Goal"), fmt(g.target))
+                KV(tr("المتبقي", "Left"), fmt(max(0.0, g.target - g.saved)))
                 if (fixing) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = fixValue, onValueChange = { fixValue = it }, singleLine = true,
-                            label = { Text("المبلغ الصحيح") }, modifier = Modifier.weight(1f),
+                            label = { Text(tr("المبلغ الصحيح", "Correct amount")) }, modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         )
                         TextButton(enabled = amountOf(fixValue) != null, onClick = {
                             db.setGoalSaved(g.id, amountOf(fixValue) ?: 0.0); fixing = false; local++
-                        }) { Text("حفظ") }
+                        }) { Text(tr("حفظ", "Save")) }
                     }
-                    Text("بيصير «جمعت» هالرقم، وما بينحسب إضافة ولا سحب.", style = MaterialTheme.typography.bodySmall,
+                    Text(tr("يصبح «جمعت» هذا الرقم، ولا يُحتسب إضافةً ولا سحباً.", "“Saved” becomes this number; it doesn't count as money in or out."), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    TextButton(onClick = { fixing = true; fixValue = plain(g.saved) }) { Text("تعديل المبلغ المجمّع") }
+                    TextButton(onClick = { fixing = true; fixValue = plain(g.saved) }) { Text(tr("تعديل المبلغ المجمّع", "Fix the saved amount")) }
                 }
 
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = amount, onValueChange = { amount = it }, label = { Text("المبلغ") },
+                    value = amount, onValueChange = { amount = it }, label = { Text(tr("المبلغ", "Amount")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                     OutlinedButton(enabled = v != null && v > 0, onClick = { db.addToGoal(g.id, v ?: 0.0); amount = ""; local++ }) {
-                        Text("حطيت")
+                        Text(tr("أضفت", "Put in"))
                     }
                     OutlinedButton(enabled = v != null && v > 0, onClick = { db.addToGoal(g.id, -(v ?: 0.0)); amount = ""; local++ }) {
-                        Text("سحبت")
+                        Text(tr("سحبت", "Took out"))
                     }
                 }
 
                 if (entries.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
-                    Text("السجل", fontWeight = FontWeight.SemiBold)
+                    Text(tr("السجل", "History"), fontWeight = FontWeight.SemiBold)
                     entries.forEach { e ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     when {
-                                        e.note == Db.CORRECTION -> "تعديل"
-                                        e.txnId != null -> "من حركة: ${e.merchant.ifEmpty { "بنك" }}"
-                                        e.amount >= 0 -> "حطيت"
-                                        else -> "سحبت"
+                                        e.note == Db.CORRECTION -> tr("تعديل", "Correction")
+                                        e.txnId != null -> tr("من حركة: ", "From transaction: ") + merchantLabel(e.merchant).ifEmpty { tr("بنك", "bank") }
+                                        e.amount >= 0 -> tr("أضفت", "Put in")
+                                        else -> tr("سحبت", "Took out")
                                     } + "  " + (if (e.amount >= 0) "+" else "−") + fmt(kotlin.math.abs(e.amount))
                                 )
                                 Text(Period.stamp(e.time), style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { db.deleteGoalEntry(e.id); local++ }) {
-                                Icon(Icons.Filled.Delete, "حذف")
+                                Icon(Icons.Filled.Delete, tr("حذف", "Delete"))
                             }
                         }
                         HorizontalDivider()
                     }
                 }
                 if (confirmDelete) {
-                    Text("متأكد؟ رح ينحذف الهدف وكل سجله.", color = MaterialTheme.colorScheme.error,
+                    Text(tr("هل أنت متأكد؟ سيُحذف الهدف وكل سجله.", "Are you sure? The goal and its history will be deleted."), color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 8.dp))
                 }
             }
         },
         confirmButton = {
             val pending = (v != null && v > 0) || (fixing && amountOf(fixValue) != null)
-            TextButton(onClick = { savePending(); onDone() }) { Text(if (pending) "حفظ وإغلاق" else "تم") }
+            TextButton(onClick = { savePending(); onDone() }) { Text(if (pending) tr("حفظ وإغلاق", "Save and close") else tr("تم", "Done")) }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = {
                     if (confirmDelete) { db.deleteGoal(g.id); onDone() } else confirmDelete = true
-                }) { Text(if (confirmDelete) "أكيد احذف" else "حذف الهدف", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = { editing = true }) { Text("تعديل") }
+                }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف الهدف", "Delete goal"), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { editing = true }) { Text(tr("تعديل", "Edit")) }
             }
         },
     )
@@ -297,24 +299,25 @@ fun GoalFormDialog(db: Db, goal: Goal?, onDone: () -> Unit) {
     val t = amountOf(target)
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (goal == null) "هدف جديد" else "تعديل الهدف") },
+        title = { Text(if (goal == null) tr("هدف جديد", "New goal") else tr("تعديل الهدف", "Edit goal")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("الهدف") },
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("الهدف", "Goal")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
-                    value = target, onValueChange = { target = it }, label = { Text("المبلغ المطلوب") },
+                    value = target, onValueChange = { target = it }, label = { Text(tr("المبلغ المطلوب", "Target amount")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("خلال", fontWeight = FontWeight.SemiBold)
+                Text(tr("خلال", "Within"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(0 to "بدون موعد", 3 to "3 شهور", 6 to "6 شهور", 12 to "سنة", 24 to "سنتين").forEach { (m, l) ->
+                    listOf(0 to tr("بدون موعد", "No deadline"), 3 to tr("3 أشهر", "3 months"), 6 to tr("6 أشهر", "6 months"),
+                        12 to tr("سنة", "1 year"), 24 to tr("سنتان", "2 years")).forEach { (m, l) ->
                         FilterChip(months == m, { months = m }, { Text(l) })
                     }
                 }
-                Text("الأيقونة", fontWeight = FontWeight.SemiBold)
+                Text(tr("الأيقونة", "Icon"), fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     goalIcons.forEach { e ->
                         Box(
@@ -325,7 +328,7 @@ fun GoalFormDialog(db: Db, goal: Goal?, onDone: () -> Unit) {
                         ) { Text(e, fontSize = 20.sp) }
                     }
                 }
-                if (confirmDelete) Text("متأكد؟", color = MaterialTheme.colorScheme.error)
+                if (confirmDelete) Text(tr("هل أنت متأكد؟", "Are you sure?"), color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
@@ -333,14 +336,14 @@ fun GoalFormDialog(db: Db, goal: Goal?, onDone: () -> Unit) {
                 val deadline = if (months > 0) Calendar.getInstance().apply { add(Calendar.MONTH, months) }.timeInMillis else null
                 db.saveGoal(goal?.id ?: 0, name.trim(), t ?: 0.0, deadline, icon)
                 onDone()
-            }) { Text("حفظ") }
+            }) { Text(tr("حفظ", "Save")) }
         },
         dismissButton = {
             Row {
                 if (goal != null) TextButton(onClick = {
                     if (confirmDelete) { db.deleteGoal(goal.id); onDone() } else confirmDelete = true
-                }) { Text(if (confirmDelete) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDone) { Text("إلغاء") }
+                }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) }
             }
         },
     )
@@ -389,7 +392,8 @@ fun JamiyaScreen(db: Db, tick: Int, refresh: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
         if (list.isEmpty()) item {
-            Text("سجّل جمعيتك: المبلغ الشهري، وعدد الأشهر، ودورك. وبعدين علّم كل شهر دفعته. اضغط ➕.",
+            Text(tr("سجّل جمعيتك: المبلغ الشهري وعدد الأشهر ودورك، ثم علّم كل شهر تدفعه. اضغط ➕.",
+                "Record your jamiya: the monthly amount, the number of months and your turn. Then tick each month you pay. Tap ➕."),
                 Modifier.padding(24.dp))
         }
         items(list, key = { it.id }) { j ->
@@ -397,18 +401,18 @@ fun JamiyaScreen(db: Db, tick: Int, refresh: () -> Unit) {
             val paid = j.paidMonths.count { it in 0 until j.months }
             val turnIdx = j.myTurn - 1
             Section("🤝 ${j.name}") {
-                KV("القسط الشهري", fmt(j.monthly))
-                KV("دفعت", "$paid من ${j.months} شهر (${fmt(paid * j.monthly)})")
-                KV("رح تقبض", fmt(j.monthly * j.months), bold = true, color = MaterialTheme.colorScheme.secondary)
+                KV(tr("القسط الشهري", "Monthly payment"), fmt(j.monthly))
+                KV(tr("دفعت", "Paid"), tr("$paid من ${monthsText(j.months)}", "$paid of ${monthsText(j.months)}") + " (${fmt(paid * j.monthly)})")
+                KV(tr("ستقبض", "You'll receive"), fmt(j.monthly * j.months), bold = true, color = MaterialTheme.colorScheme.secondary)
                 val turnText = when {
-                    j.received -> "قبضت ✓"
-                    turnIdx == cur -> "هالشهر! 🎉"
-                    turnIdx > cur -> "بعد ${turnIdx - cur} شهر (${JamiyaMonths.label(j, turnIdx)})"
-                    else -> "كان ${JamiyaMonths.label(j, turnIdx)} — علّم إذا قبضت"
+                    j.received -> tr("قبضت ✓", "Received ✓")
+                    turnIdx == cur -> tr("هذا الشهر! 🎉", "This month! 🎉")
+                    turnIdx > cur -> tr("بعد ${monthsText(turnIdx - cur)}", "In ${monthsText(turnIdx - cur)}") + " (${JamiyaMonths.label(j, turnIdx)})"
+                    else -> tr("كان في ${JamiyaMonths.label(j, turnIdx)} — علّمه إذا قبضت", "Was ${JamiyaMonths.label(j, turnIdx)} — tick it if you received it")
                 }
-                KV("دورك", turnText, bold = true)
+                KV(tr("دورك", "Your turn"), turnText, bold = true)
                 Spacer(Modifier.height(8.dp))
-                Text("اضغط على الشهر عشان تعلّمه مدفوع:", style = MaterialTheme.typography.bodySmall)
+                Text(tr("اضغط على الشهر لتعليمه مدفوعاً:", "Tap a month to mark it paid:"), style = MaterialTheme.typography.bodySmall)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -440,17 +444,17 @@ fun JamiyaScreen(db: Db, tick: Int, refresh: () -> Unit) {
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = j.received, onCheckedChange = { db.setJamiyaReceived(j.id, it); local++ })
-                    Text("قبضت الجمعية", Modifier.weight(1f))
+                    Text(tr("قبضت الجمعية", "I received the jamiya"), Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { editing = j }) { Text("تعديل") }
+                    TextButton(onClick = { editing = j }) { Text(tr("تعديل", "Edit")) }
                     TextButton(onClick = {
                         if (deleting == j.id) { db.deleteJamiya(j.id); deleting = null; local++ } else deleting = j.id
                     }) {
-                        Text(if (deleting == j.id) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error)
+                        Text(if (deleting == j.id) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error)
                     }
                 }
-                ReceiptButtons("كشف الجمعية (PDF)", "jamiya-${j.id}.pdf") { Receipt.forJamiya(it, j.id) }
+                ReceiptButtons(tr("كشف الجمعية (PDF)", "Jamiya statement (PDF)"), "jamiya-${j.id}.pdf") { Receipt.forJamiya(it, j.id) }
             }
         }
     }
@@ -459,7 +463,7 @@ fun JamiyaScreen(db: Db, tick: Int, refresh: () -> Unit) {
 
 @Composable
 fun JamiyaFormDialog(db: Db, j: Jamiya?, onDone: () -> Unit) {
-    var name by remember { mutableStateOf(j?.name ?: "جمعية") }
+    var name by remember { mutableStateOf(j?.name ?: tr("جمعية", "Jamiya")) }
     var monthly by remember { mutableStateOf(j?.monthly?.let(::plain) ?: "") }
     var months by remember { mutableStateOf(j?.months?.toString() ?: "10") }
     var start by remember { mutableStateOf(j?.startMonth ?: JamiyaMonths.thisMonth()) }
@@ -472,23 +476,23 @@ fun JamiyaFormDialog(db: Db, j: Jamiya?, onDone: () -> Unit) {
         tr != null && tr in 1..n && JamiyaMonths.valid(start)
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text(if (j == null) "جمعية جديدة" else "تعديل الجمعية") },
+        title = { Text(if (j == null) tr("جمعية جديدة", "New jamiya") else tr("تعديل الجمعية", "Edit jamiya")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("الاسم") },
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(tr("الاسم", "Name")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = monthly, onValueChange = { monthly = it }, label = { Text("القسط الشهري") },
+                OutlinedTextField(value = monthly, onValueChange = { monthly = it }, label = { Text(tr("القسط الشهري", "Monthly payment")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 OutlinedTextField(value = months, onValueChange = { months = it.filter(Char::isDigit) },
-                    label = { Text("عدد الأشهر (= عدد المشتركين)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("عدد الأشهر (= عدد المشتركين)", "Number of months (= members)")) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("أول شهر (سنة-شهر مثل 2026-10)") },
+                OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text(tr("الشهر الأول (سنة-شهر مثل 2026-10)", "First month (year-month, e.g. 2026-10)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = turn, onValueChange = { turn = it.filter(Char::isDigit) },
-                    label = { Text("دورك (رقم الشهر اللي بتقبض فيه)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("دورك (رقم الشهر الذي تقبض فيه)", "Your turn (the month number you receive in)")) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                if (confirmDelete) Text("متأكد؟", color = MaterialTheme.colorScheme.error)
+                if (confirmDelete) Text(tr("هل أنت متأكد؟", "Are you sure?"), color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
@@ -496,14 +500,14 @@ fun JamiyaFormDialog(db: Db, j: Jamiya?, onDone: () -> Unit) {
                 db.saveJamiya(Jamiya(j?.id ?: 0, name.trim(), m ?: 0.0, n ?: 1, start.trim(), tr ?: 1,
                     j?.paidMonths ?: emptySet(), j?.received ?: false))
                 onDone()
-            }) { Text("حفظ") }
+            }) { Text(tr("حفظ", "Save")) }
         },
         dismissButton = {
             Row {
                 if (j != null) TextButton(onClick = {
                     if (confirmDelete) { db.deleteJamiya(j.id); onDone() } else confirmDelete = true
-                }) { Text(if (confirmDelete) "أكيد احذف" else "حذف", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDone) { Text("إلغاء") }
+                }) { Text(if (confirmDelete) tr("نعم، احذف", "Yes, delete") else tr("حذف", "Delete"), color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDone) { Text(tr("إلغاء", "Cancel")) }
             }
         },
     )
