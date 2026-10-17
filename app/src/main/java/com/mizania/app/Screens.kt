@@ -398,7 +398,7 @@ fun HomeScreen(
     val pending = remember(tick) { db.pending() }
     val debts = remember(tick) { db.debts().filter { !it.closed } }
     val senders = remember(tick) { db.senders() }
-    val quick = remember(tick) { quickCategories(db, cats) }
+    val hasTxns = remember(tick) { db.recent(1).isNotEmpty() }
     val dailyIds = cats.filter { it.type == Db.DAILY }.map { it.id }.toSet()
     val perDayLimit = cats.filter { it.type == Db.DAILY }.sumOf { it.budget } / cycle.days
     val perDay = remember(tick) { db.spentPerDay(cycle.from, cycle.to, dailyIds) }
@@ -407,55 +407,47 @@ fun HomeScreen(
     var showBalance by remember { mutableStateOf(false) }
     var catSheet by remember { mutableStateOf<Long?>(null) }
     var showMath by remember { mutableStateOf(false) }
+    var allLines by remember { mutableStateOf(false) }
+
+    val steps = listOf(
+        SetupStep("📩", tr("اسمح بقراءة الرسائل", "Allow reading SMS"), !missingPerms, onAskPerms,
+            tr("لا يعمل الزر؟ إعدادات التطبيق ← ⋮ ← السماح بالإعدادات المقيدة", "Button does nothing? App settings → ⋮ → Allow restricted settings")),
+        SetupStep("🏦", tr("اختر رسائل بنكك", "Pick your bank's messages"), senders.isNotEmpty(), onGoSettings),
+        SetupStep("🎯", tr("حدّد ميزانيتك الشهرية", "Set your monthly budget"), cats.any { it.budget > 0 }, onGoSettings),
+    )
+    // Until the bank is connected there is nothing to show but zeros: show only the welcome and the steps.
+    val welcome = !hasTxns && (missingPerms || senders.isEmpty())
 
     LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
         item {
             Row(
-                Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp),
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(greeting(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(greeting(), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onGoSettings) {
                     Icon(Icons.Filled.Settings, tr("الإعدادات", "Settings"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+        if (welcome) item {
             Column(
-                Modifier.fillMaxWidth().clickable { showBalance = true }
-                    .padding(start = 20.dp, end = 20.dp, bottom = 10.dp)
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (al.balance != null) {
-                    Text(tr("رصيدك في البنك", "Bank balance"), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    AnimatedAmount(al.balance, 38.sp, if (al.balance < 0) p.pomegranate else MaterialTheme.colorScheme.onSurface,
-                        weight = FontWeight.Bold)
-                } else {
-                    Text(tr("رصيدك غير معروف بعد", "Balance not known yet"), style = MaterialTheme.typography.titleLarge)
-                    Text(tr("يظهر من أول رسالة تتضمن «الرصيد»، أو اضغط هنا لإدخاله.",
-                        "It shows up with the first bank SMS that mentions your balance, or tap here to enter it."),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Spacer(Modifier.height(8.dp))
-                SalaryLine(ci)
+                Text("👋", fontSize = 56.sp)
+                Text(tr("أهلاً بك في ميزانيتي", "Welcome to My Budget"), style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(top = 8.dp))
+                Text(tr("التطبيق يقرأ رسائل البنك ويحسب لك كم يمكنك أن تصرف كل يوم.",
+                    "The app reads your bank SMS and tells you how much you can spend each day."),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
             }
         }
-        if (missingPerms) item {
-            Notice(tr("يحتاج التطبيق إلى صلاحية الرسائل والإشعارات", "The app needs SMS and notification access"),
-                tr("إذا لم يفتح الزر شيئاً: إعدادات التطبيق، ثم ⋮، ثم «السماح بالإعدادات المقيدة».",
-                    "If the button does nothing: open the app's system settings, then ⋮, then “Allow restricted settings”."),
-                tr("منح الصلاحيات", "Grant access"), onAskPerms)
-        }
-        if (cats.isNotEmpty() && cats.all { it.budget <= 0.0 }) item {
-            Notice(tr("حدّد المبلغ الذي تريد صرفه على كل بند", "Set how much you want to spend on each line"),
-                tr("من الإعدادات ← البنود: اكتب ميزانية شهرية لكل بند (إيجار، فواتير، مواصلات…) ليصبح «المتاح اليوم» دقيقاً.",
-                    "In Settings → Budget lines, enter a monthly budget for each line (rent, bills, transport…) so “You can spend today” is accurate."),
-                tr("تحديد الميزانية", "Set budgets"), onGoSettings)
-        }
-        if (senders.isEmpty()) item {
-            Notice(tr("لم تختر مرسل رسائل البنك بعد", "You haven't picked your bank's sender yet"),
-                tr("اختر الجهة التي ترسل لك رسائل البنك ليتابعها التطبيق.", "Pick who sends you bank SMS so the app can follow them."),
-                tr("الاختيار من الإعدادات", "Pick in Settings"), onGoSettings)
-        }
+        if (steps.any { !it.done }) item { SetupCard(steps) }
+        if (welcome) return@LazyColumn
+
+        // The one number that matters: what you can spend today. Tap for how it's worked out.
         item {
             val over = al.leftToday < 0
             Column(
@@ -464,66 +456,108 @@ fun HomeScreen(
                     .clip(RoundedCornerShape(30.dp)).background(p.hero)
                     .clickable { showBalance = true }.padding(22.dp)
             ) {
-                Text(if (over) tr("تجاوزت حدك اليوم", "Over today's limit") else tr("المتاح لك للصرف اليوم", "You can spend today"),
-                    color = p.onPine.copy(alpha = 0.75f), style = MaterialTheme.typography.bodyMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (over) tr("تجاوزت حدك اليوم", "Over today's limit") else tr("يمكنك أن تصرف اليوم", "You can spend today"),
+                        Modifier.weight(1f), color = p.onPine.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyLarge)
+                    Text("ⓘ", color = p.onPine.copy(alpha = 0.7f), fontSize = 18.sp)
+                }
                 AnimatedAmount(if (over) -al.leftToday else al.leftToday, 52.sp, if (over) Color(0xFFFFC2CC) else p.onPine,
                     weight = FontWeight.Bold)
-                if (al.spendable != null) {
-                    Text(
-                        if (al.spendable < 0) tr("رصيدك أقل من التزاماتك بمقدار ${fmt(-al.spendable)}",
-                            "Your balance is ${fmt(-al.spendable)} short of your commitments")
-                        else tr("من رصيدك بعد حجز ${fmt(al.committed)} للفواتير والادخار، موزعاً على ${daysText(al.daysLeft)}",
-                            "From your balance after setting aside ${fmt(al.committed)} for bills and savings, spread over ${daysText(al.daysLeft)}"),
-                        color = if (al.spendable < 0) Color(0xFFFFC2CC) else p.onPine.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+                Text(
+                    when {
+                        al.spendable != null && al.spendable < 0 -> tr("رصيدك لا يكفي فواتيرك هذا الشهر", "Your balance won't cover this month's bills")
+                        over -> tr("حاول ألا تصرف أكثر اليوم", "Try not to spend more today")
+                        else -> tr("في اليوم، لمدة ${daysText(al.daysLeft)} حتى الراتب", "a day, for ${daysText(al.daysLeft)} until payday")
+                    },
+                    color = if (al.spendable != null && al.spendable < 0) Color(0xFFFFC2CC) else p.onPine.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(16.dp))
+                DayStrip(perDay, perDayLimit, todayIndex(cycle), p.onPine)
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth()) {
                     HeroStat(tr("صرفت اليوم", "Spent today"), fmt(al.spentToday), Modifier.weight(1f))
-                    HeroStat(tr("المتاح غداً", "Tomorrow"), fmt(al.tomorrow), Modifier.weight(1f))
+                    HeroStat(tr("غداً", "Tomorrow"), fmt(al.tomorrow), Modifier.weight(1f))
                 }
-                Spacer(Modifier.height(18.dp))
-                DayStrip(perDay, perDayLimit, todayIndex(cycle), p.onPine)
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                    Text(Period.label(Period.MODE_DAY, Range(cycle.from, cycle.from + Period.DAY)).substringAfter(' '),
-                        Modifier.weight(1f), color = p.onPine.copy(alpha = 0.78f), fontSize = 11.sp, fontFamily = Ui.numbers)
-                    Text(tr("الراتب القادم ${Period.dayMonth(ci.nextSalary)}", "Next salary ${Period.dayMonth(ci.nextSalary)}"), color = p.onPine.copy(alpha = 0.78f),
-                        fontSize = 11.sp, fontFamily = Ui.numbers)
-                }
+            }
+        }
+        // Balance and salary as two small tiles.
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MiniTile(
+                    "🏦", tr("رصيدك", "Balance"),
+                    al.balance?.let { fmt(it) } ?: tr("أدخله", "Add it"),
+                    Modifier.weight(1f), onClick = { showBalance = true },
+                    valueColor = if ((al.balance ?: 0.0) < 0) p.pomegranate else Color.Unspecified,
+                )
+                val days = max(0, ((ci.nextSalary - Period.day().from) / Period.DAY).toInt())
+                MiniTile(
+                    "💰", tr("الراتب", "Salary"),
+                    when {
+                        ci.late -> tr("متأخر", "Late")
+                        days == 0 -> tr("اليوم", "Today")
+                        else -> tr("بعد ${daysText(days)}", "In ${daysText(days)}")
+                    },
+                    Modifier.weight(1f),
+                    valueColor = if (ci.late) p.dinar else Color.Unspecified,
+                )
             }
         }
         if (pending.isNotEmpty()) item {
             TriageCard(pending, cats, onTriage)
         }
+        // Budget lines: the ones in use, most used first; the rest behind "show all".
         item {
-            Section(tr("الشهر (${Period.label(Period.MODE_MONTH, cycle)})", "This month (${Period.label(Period.MODE_MONTH, cycle)})")) {
+            val used = cats.filter { it.budget > 0 || (spent[it.id] ?: 0.0) > 0 }
+                .sortedByDescending { spent[it.id] ?: 0.0 }
+            val shown = if (allLines) cats.sortedByDescending { spent[it.id] ?: 0.0 } else used.take(5)
+            val more = if (allLines) 0 else cats.size - shown.size
+            Section(tr("بنودك هذا الشهر", "Your budget this month")) {
+                if (shown.isEmpty()) {
+                    Text(tr("لا يوجد صرف بعد هذا الشهر.", "No spending yet this month."),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                }
+                shown.forEach { c -> CatBar(c, c.name, spent[c.id] ?: 0.0, c.budget) { catSheet = c.id } }
+                val unc = spent[null] ?: 0.0
+                if (unc > 0) CatBar(null, tr("بدون بند", "No line"), unc, 0.0) { catSheet = -1L }
+                if (more > 0 || allLines) {
+                    TextButton(onClick = { allLines = !allLines }) {
+                        Text(if (allLines) tr("عرض أقل", "Show less") else tr("عرض كل البنود ($more)", "Show all lines ($more)"))
+                    }
+                }
+            }
+        }
+        item {
+            Section(tr("الشهر", "This month")) {
                 val otherIn = remember(tick) { db.otherIncome(cycle.from, cycle.to) }
                 val startBal = remember(tick) { db.totalBalanceAt(cycle.from) }
                 val income = ci.salary + otherIn
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val slices = cats.map { c -> Slice(c.name, spent[c.id] ?: 0.0, Color(c.color)) } +
                         listOf(Slice(tr("بدون بند", "No line"), spent[null] ?: 0.0, Color(0xFF9E9E9E)))
-                    Box(Modifier.width(132.dp)) {
+                    Box(Modifier.width(120.dp)) {
                         if (income > 0) {
                             DonutChart(slices, "${((totalOut / income) * 100).toInt()}%", tr("من الدخل", "of income"),
-                                size = 128.dp, showLegend = false)
+                                size = 116.dp, showLegend = false)
                         } else {
-                            DonutChart(slices, "", "", size = 128.dp, showLegend = false)
+                            DonutChart(slices, "", "", size = 116.dp, showLegend = false)
                         }
                     }
                     Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                        Text(tr("دخلك", "Income"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text(tr("دخل", "In"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         Amount(income, 22.sp, p.mint)
                         Spacer(Modifier.height(8.dp))
-                        Text(tr("صرفت", "Spent"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text(tr("صرف", "Out"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         Amount(totalOut, 22.sp)
                     }
                 }
                 // Everything adds up to the real balance; whatever the SMS did not explain shows as its own line.
                 if (al.balance != null) {
                     TextButton(onClick = { showMath = !showMath }, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(if (showMath) tr("إخفاء الحساب", "Hide the math") else tr("كيف وصلنا إلى رصيدك؟", "How did we get your balance?"))
+                        Text(if (showMath) tr("إخفاء التفاصيل", "Hide details") else tr("كيف وصلنا إلى رصيدك؟", "How did we get your balance?"))
                     }
                 }
                 AnimatedVisibility(showMath && al.balance != null) { Column {
@@ -552,19 +586,6 @@ fun HomeScreen(
                 if (owedMe > 0) KV(tr("لي عند الآخرين", "Owed to me"), fmt(owedMe), color = p.mint, bold = true)
             }
         }
-        for (type in listOf(Db.DAILY, Db.FIXED, Db.RESERVE)) {
-            val group = cats.filter { it.type == type }
-            if (group.isEmpty()) continue
-            item(key = "type$type") {
-                Section(typeNames[type] ?: "") {
-                    group.forEach { c -> CatBar(c, c.name, spent[c.id] ?: 0.0, c.budget) { catSheet = c.id } }
-                    if (type == Db.DAILY) {
-                        val unc = spent[null] ?: 0.0
-                        if (unc > 0) CatBar(null, tr("بدون بند", "No line"), unc, 0.0) { catSheet = -1L }
-                    }
-                }
-            }
-        }
     }
 
     if (showBalance) BalanceSheet(db) { showBalance = false; refresh() }
@@ -574,29 +595,81 @@ fun HomeScreen(
     }
 }
 
-/** Where the salary stands: landed (when and how much), late, or not yet. */
+/** One thing to do before the app can help: [hint] shows under it while it is not done. */
+data class SetupStep(val icon: String, val title: String, val done: Boolean, val onClick: () -> Unit, val hint: String = "")
+
+/** "Get started": the setup steps as a short checklist; the next one to do is highlighted. */
 @Composable
-fun SalaryLine(ci: CycleInfo) {
+fun SetupCard(steps: List<SetupStep>) {
     val p = Ui.p
-    val (dot, text) = when {
-        ci.late -> p.dinar to tr("الراتب متأخر، كان متوقعاً في ${Period.dayMonth(ci.nextSalary)}",
-            "Salary is late, it was expected on ${Period.dayMonth(ci.nextSalary)}")
-        ci.received -> p.mint to tr("وصل الراتب ${Period.dayMonth(ci.salaryAt ?: ci.range.from)}: ${fmt(ci.salary)}",
-            "Salary arrived ${Period.dayMonth(ci.salaryAt ?: ci.range.from)}: ${fmt(ci.salary)}")
-        else -> MaterialTheme.colorScheme.outline to tr("لم يصل الراتب بعد", "Salary hasn't arrived yet")
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(dot))
-        Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
-    }
-    if (!ci.late) {
-        val days = max(0, ((ci.nextSalary - Period.day().from) / Period.DAY).toInt())
-        Text(
-            tr("الراتب القادم تقريباً ${Period.dayMonth(ci.nextSalary)}", "Next salary around ${Period.dayMonth(ci.nextSalary)}") +
-                if (days > 0) tr("، بعد ${daysText(days)}", ", in ${daysText(days)}") else "",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+    val doneCount = steps.count { it.done }
+    val next = steps.indexOfFirst { !it.done }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, p.line, RoundedCornerShape(24.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("لنبدأ", "Let's get started"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Text(tr("$doneCount من ${steps.size}", "$doneCount of ${steps.size}"), fontFamily = Ui.numbers,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        }
+        LinearProgressIndicator(
+            progress = { doneCount.toFloat() / steps.size },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp).height(6.dp).clip(RoundedCornerShape(3.dp)),
+            color = p.mint, trackColor = p.line, drawStopIndicator = {},
         )
+        steps.forEachIndexed { i, s ->
+            val isNext = i == next
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp))
+                    .background(if (isNext) p.pine.copy(alpha = 0.18f) else Color.Transparent)
+                    .clickable(enabled = !s.done, onClick = s.onClick)
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (s.done) p.mint.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainer),
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (s.done) "✓" else s.icon, fontSize = 18.sp, color = p.mint) }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(s.title, style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (isNext) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                    if (isNext && s.hint.isNotEmpty()) {
+                        Text(s.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (!s.done) Icon(
+                    if (Lang.ar) Icons.Filled.KeyboardArrowLeft else Icons.Filled.KeyboardArrowRight, null,
+                    tint = if (isNext) p.pine else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** A small rounded tile: emoji, label and one value. */
+@Composable
+fun MiniTile(
+    icon: String, label: String, value: String, modifier: Modifier,
+    onClick: (() -> Unit)? = null, valueColor: Color = Color.Unspecified,
+) {
+    Row(
+        modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, Ui.p.line, RoundedCornerShape(20.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(icon, fontSize = 22.sp)
+        Column(Modifier.padding(start = 10.dp)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontFamily = Ui.numbers, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = valueColor,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -605,19 +678,6 @@ private fun HeroStat(label: String, value: String, modifier: Modifier) {
     Column(modifier) {
         Text(label, color = Ui.p.onPine.copy(alpha = 0.78f), fontSize = 12.sp)
         Text(value, color = Ui.p.onPine, fontFamily = Ui.numbers, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-/** A setup step the user still has to do. */
-@Composable
-fun Notice(title: String, body: String, action: String, onAction: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(18.dp))
-            .background(Ui.p.dinar.copy(alpha = 0.16f)).padding(16.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleSmall)
-        Text(body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-        Button(onClick = onAction, modifier = Modifier.padding(top = 10.dp), shape = RoundedCornerShape(12.dp)) { Text(action) }
     }
 }
 
@@ -1005,7 +1065,7 @@ fun TriageCard(pending: List<Txn>, cats: List<Category>, onTriage: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(tr("${txnsText(pending.size)} بحاجة إلى تصنيف", "${txnsText(pending.size)} to sort"), style = MaterialTheme.typography.titleMedium)
-            Text(tr("صنّف كل حركة بلمسة واحدة ليصبح المتاح اليوم دقيقاً.", "One tap each, and today's allowance becomes accurate."),
+            Text(tr("لمسة واحدة لكل حركة", "One tap each"),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
