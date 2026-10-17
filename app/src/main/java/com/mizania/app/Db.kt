@@ -815,6 +815,22 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
             "id=?", arrayOf(id.toString()))
     }
 
+    /**
+     * Takes a transaction off its budget line, back to "to sort", and out of any goal, debt or jamiya.
+     * The shop's rule that books it into that line goes too, or it would come straight back.
+     * Returns true when a rule was removed.
+     */
+    fun unbook(txnId: Long): Boolean {
+        val t = txn(txnId) ?: return false
+        val cat = t.categoryId ?: return false
+        unlinkAll(txnId)
+        updateTxn(txnId, null, t.note)
+        val key = ruleKey(t.merchant)
+        val drop = if (key.isEmpty()) emptyList() else rules().filter { it.categoryId == cat && key.contains(it.keyword) }
+        drop.forEach { deleteRule(it.id) }
+        return drop.isNotEmpty()
+    }
+
     fun deleteRule(id: Long) {
         writableDatabase.delete("rules", "id=?", arrayOf(id.toString()))
     }

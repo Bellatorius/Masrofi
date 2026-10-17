@@ -591,7 +591,7 @@ fun HomeScreen(
     if (showBalance) BalanceSheet(db) { showBalance = false; refresh() }
     catSheet?.let { id ->
         CategorySheet(db, cats.firstOrNull { it.id == id }, cycle, tr("هذا الشهر", "This month"),
-            onOpen = { tid -> catSheet = null; onOpen(tid) }, onDone = { catSheet = null })
+            onOpen = { tid -> catSheet = null; onOpen(tid) }, onDone = { catSheet = null }, onChanged = refresh)
     }
 }
 
@@ -790,7 +790,7 @@ fun TxnsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit, refresh: () -> Unit, o
 // ---------------- reports ----------------
 
 @Composable
-fun ReportsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit) {
+fun ReportsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit, refresh: () -> Unit = {}) {
     var mode by rememberSaveable { mutableIntStateOf(Period.MODE_MONTH) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
     var acc by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -959,7 +959,7 @@ fun ReportsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit) {
     catSheet?.let { id ->
         CategorySheet(db, cats.firstOrNull { it.id == id }, range, Period.label(mode, range),
             onOpen = { tid -> catSheet = null; onOpen(tid) }, onDone = { catSheet = null },
-            monthly = mode == Period.MODE_MONTH)
+            monthly = mode == Period.MODE_MONTH, onChanged = refresh)
     }
 }
 
@@ -988,10 +988,12 @@ fun monthTip(cats: List<Category>, now: Map<Long?, Double>, prev: Map<Long?, Dou
 @Composable
 fun CategorySheet(
     db: Db, cat: Category?, range: Range, periodLabel: String,
-    onOpen: (Long) -> Unit, onDone: () -> Unit, monthly: Boolean = true,
+    onOpen: (Long) -> Unit, onDone: () -> Unit, monthly: Boolean = true, onChanged: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
-    val list = remember(cat, range) { db.txnsInCategory(cat?.id, range.from, range.to) }
+    var version by remember { mutableIntStateOf(0) }
+    val list = remember(cat, range, version) { db.txnsInCategory(cat?.id, range.from, range.to) }
+    var undoing by remember { mutableStateOf<Txn?>(null) }
     val total = list.sumOf { it.amount }
     val color = cat?.let { Color(it.color) } ?: MaterialTheme.colorScheme.outline
     SheetFrame(onDone) {
@@ -1040,13 +1042,44 @@ fun CategorySheet(
                             }
                         }
                         Amount(t.amount, 15.sp)
+                        // Take it off this line (back to "to sort").
+                        if (cat != null) {
+                            IconButton(onClick = { undoing = t }) {
+                                Text("↩", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
-            Text(tr("اضغط على أي حركة لتغيير بندها أو إضافة ملاحظة.", "Tap a transaction to change its line or add a note."), style = MaterialTheme.typography.bodySmall,
+            Text(if (cat != null) tr("اضغط على حركة لتغيير بندها، أو ↩ لإلغاء تصنيفها.", "Tap a transaction to change its line, or ↩ to undo it.")
+                else tr("اضغط على أي حركة لتغيير بندها أو إضافة ملاحظة.", "Tap a transaction to change its line or add a note."), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             ReceiptButtons(tr("كشف البند (PDF)", "Line statement (PDF)"), "category.pdf") { Receipt.forCategory(it, cat, range, periodLabel) }
         }
+    }
+    undoing?.let { t ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { undoing = null },
+            title = { Text(tr("إلغاء تصنيف هذه الحركة؟", "Undo this transaction?")) },
+            text = {
+                Text(tr("ستُزال ${fmt(t.amount)} (${t.title}) من «${cat?.name}» وتعود إلى «بحاجة إلى تصنيف».",
+                    "${fmt(t.amount)} (${t.title}) leaves “${cat?.name}” and goes back to “To sort”."))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ruleGone = db.unbook(t.id)
+                    undoing = null
+                    version++
+                    onChanged()
+                    android.widget.Toast.makeText(ctx,
+                        if (ruleGone) tr("أُعيدت إلى «بحاجة إلى تصنيف»، ولن تُصنَّف «${t.title}» هنا تلقائياً بعد الآن",
+                            "Back in “To sort”; “${t.title}” won't go here automatically any more")
+                        else tr("أُعيدت إلى «بحاجة إلى تصنيف»", "Moved back to “To sort”"),
+                        android.widget.Toast.LENGTH_LONG).show()
+                }) { Text(tr("إلغاء التصنيف", "Undo"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { undoing = null }) { Text(tr("رجوع", "Back")) } },
+        )
     }
 }
 

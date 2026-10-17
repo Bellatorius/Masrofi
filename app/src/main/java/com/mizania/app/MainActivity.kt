@@ -283,7 +283,7 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
                         onTriage = { triage = true },
                         refresh = refresh)
                     1 -> TxnsScreen(db, tick, onOpen = setOpenTxn, refresh = refresh, onTriage = { triage = true })
-                    2 -> ReportsScreen(db, tick, onOpen = setOpenTxn)
+                    2 -> ReportsScreen(db, tick, onOpen = setOpenTxn, refresh = refresh)
                     3 -> MoneyScreen(db, tick, refresh)
                     else -> SettingsScreen(db, tick, refresh)
                 }
