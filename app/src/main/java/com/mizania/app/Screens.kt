@@ -523,8 +523,6 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                 }
                 shown.forEach { c -> CatBar(c, c.name, spent[c.id] ?: 0.0, c.budget) { catSheet = c.id } }
-                val unc = spent[null] ?: 0.0
-                if (unc > 0) CatBar(null, tr("بدون بند", "No line"), unc, 0.0) { catSheet = -1L }
                 if (more > 0 || allLines) {
                     TextButton(onClick = { allLines = !allLines }) {
                         Text(if (allLines) tr("عرض أقل", "Show less") else tr("عرض كل البنود ($more)", "Show all lines ($more)"))
@@ -1063,25 +1061,35 @@ fun CategorySheet(
     undoing?.let { t ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { undoing = null },
-            title = { Text(tr("إلغاء تصنيف هذه الحركة؟", "Undo this transaction?")) },
+            title = { Text(tr("إزالة الحركة من «${cat?.name}»؟", "Remove from “${cat?.name}”?")) },
             text = {
-                Text(tr("ستُزال ${fmt(t.amount)} (${t.title}) من «${cat?.name}» وتعود إلى «بحاجة إلى تصنيف».",
-                    "${fmt(t.amount)} (${t.title}) leaves “${cat?.name}” and goes back to “To sort”."))
+                Column {
+                    Text(fmt(t.amount) + tr("، ", ", ") + t.title, fontWeight = FontWeight.SemiBold)
+                    Text(tr("اختر ما تريد:", "Choose what to do:"), Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Not spending at all: it leaves every total and the daily allowance.
+                    fun done(ignore: Boolean) {
+                        val ruleGone = db.unbook(t.id)
+                        if (ignore) { db.ignoreTxn(t.id); Notifier.cancel(ctx, t.id) }
+                        undoing = null
+                        version++
+                        onChanged()
+                        val msg = if (ignore) tr("أُزيلت من الميزانية", "Removed from your budget")
+                            else tr("أُعيدت إلى «بحاجة إلى تصنيف»", "Moved back to “To sort”")
+                        val rule = if (ruleGone) tr("، ولن تُصنَّف «${t.title}» هنا تلقائياً بعد الآن", "; “${t.title}” won't go here automatically any more") else ""
+                        android.widget.Toast.makeText(ctx, msg + rule, android.widget.Toast.LENGTH_LONG).show()
+                    }
+                    androidx.compose.material3.Button(
+                        onClick = { done(ignore = true) }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    ) { Text(tr("ليست مصروفاً، احذفها من الميزانية", "Not spending — remove it from the budget")) }
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { done(ignore = false) }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    ) { Text(tr("أعدها إلى «بحاجة إلى تصنيف»", "Move it back to “To sort”")) }
+                }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val ruleGone = db.unbook(t.id)
-                    undoing = null
-                    version++
-                    onChanged()
-                    android.widget.Toast.makeText(ctx,
-                        if (ruleGone) tr("أُعيدت إلى «بحاجة إلى تصنيف»، ولن تُصنَّف «${t.title}» هنا تلقائياً بعد الآن",
-                            "Back in “To sort”; “${t.title}” won't go here automatically any more")
-                        else tr("أُعيدت إلى «بحاجة إلى تصنيف»", "Moved back to “To sort”"),
-                        android.widget.Toast.LENGTH_LONG).show()
-                }) { Text(tr("إلغاء التصنيف", "Undo"), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { undoing = null }) { Text(tr("رجوع", "Back")) } },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { undoing = null }) { Text(tr("إلغاء", "Cancel")) } },
         )
     }
 }
