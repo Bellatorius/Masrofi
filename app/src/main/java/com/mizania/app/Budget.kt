@@ -70,7 +70,7 @@ object Budget {
      */
     fun cycle(db: Db, offset: Int = 0, now: Long = System.currentTimeMillis()): CycleInfo {
         val salaries = db.salaries().filter { it.time <= now }
-        val starts = if (db.setting("cycle_mode", "salary") == "salary") salaryStarts(salaries) else emptyList()
+        val starts = if (!db.noSalary() && db.setting("cycle_mode", "salary") == "salary") salaryStarts(salaries) else emptyList()
         if (starts.isEmpty()) {
             val r = Period.cycle(db.cycleDay(), now, offset)
             val inRange = salaries.filter { it.time >= r.from && it.time < r.to }

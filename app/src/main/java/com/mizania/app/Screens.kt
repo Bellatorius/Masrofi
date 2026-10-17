@@ -408,6 +408,7 @@ fun HomeScreen(
     var catSheet by remember { mutableStateOf<Long?>(null) }
     var showMath by remember { mutableStateOf(false) }
     var allLines by remember { mutableStateOf(false) }
+    val noSalary = remember(tick) { db.noSalary() }
 
     val steps = listOf(
         SetupStep("📩", tr("اسمح بقراءة الرسائل", "Allow reading SMS"), !missingPerms, onAskPerms,
@@ -467,6 +468,7 @@ fun HomeScreen(
                     when {
                         al.spendable != null && al.spendable < 0 -> tr("رصيدك لا يكفي فواتيرك هذا الشهر", "Your balance won't cover this month's bills")
                         over -> tr("حاول ألا تصرف أكثر اليوم", "Try not to spend more today")
+                        noSalary -> tr("في اليوم، لمدة ${daysText(al.daysLeft)} حتى نهاية الشهر", "a day, for the ${daysText(al.daysLeft)} left this month")
                         else -> tr("في اليوم، لمدة ${daysText(al.daysLeft)} حتى الراتب", "a day, for ${daysText(al.daysLeft)} until payday")
                     },
                     color = if (al.spendable != null && al.spendable < 0) Color(0xFFFFC2CC) else p.onPine.copy(alpha = 0.8f),
@@ -494,7 +496,7 @@ fun HomeScreen(
                     valueColor = if ((al.balance ?: 0.0) < 0) p.pomegranate else Color.Unspecified,
                 )
                 val days = max(0, ((ci.nextSalary - Period.day().from) / Period.DAY).toInt())
-                MiniTile(
+                if (!noSalary) MiniTile(
                     "💰", tr("الراتب", "Salary"),
                     when {
                         ci.late -> tr("متأخر", "Late")
@@ -564,8 +566,9 @@ fun HomeScreen(
                 if (al.balance != null) {
                     HorizontalDivider(Modifier.padding(vertical = 10.dp), color = p.line)
                     if (startBal != null) KV(if (ci.bySalary) tr("رصيدك قبل الراتب", "Balance before salary") else tr("رصيدك في بداية الشهر", "Balance at month start"), fmt(startBal))
-                    KV(if (ci.received) tr("+ الراتب", "+ Salary") else tr("+ الراتب (لم يصل بعد)", "+ Salary (not arrived yet)"), fmt(ci.salary))
-                    if (otherIn > 0) KV(tr("+ دخل آخر (كليك وتحويلات واردة)", "+ Other income (CliQ and incoming transfers)"), fmt(otherIn))
+                    if (noSalary) KV(tr("+ الدخل", "+ Income"), fmt(income))
+                    else KV(if (ci.received) tr("+ الراتب", "+ Salary") else tr("+ الراتب (لم يصل بعد)", "+ Salary (not arrived yet)"), fmt(ci.salary))
+                    if (otherIn > 0 && !noSalary) KV(tr("+ دخل آخر (كليك وتحويلات واردة)", "+ Other income (CliQ and incoming transfers)"), fmt(otherIn))
                     KV(tr("− صرفت", "− Spent"), fmt(totalOut))
                     val expected = (startBal ?: 0.0) + income - totalOut
                     val gap = al.balance - expected
@@ -879,7 +882,7 @@ fun ReportsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit, refresh: () -> Unit
             Section(tr("الملخص", "Summary")) {
                 if (inc > 0) KV(tr("إجمالي الدخل", "Total income"), "+" + fmt(inc), color = Ui.p.mint)
                 if (monthInfo != null) {
-                    KV(tr("الراتب", "Salary"), if (monthInfo.received) fmt(monthInfo.salary) else tr("لم يصل في هذه الفترة", "Not in this period"))
+                    if (!db.noSalary()) KV(tr("الراتب", "Salary"), if (monthInfo.received) fmt(monthInfo.salary) else tr("لم يصل في هذه الفترة", "Not in this period"))
                     KV(tr("الدخل − الصرف", "Income − spending"), fmt(inc - out), bold = true,
                         color = if (inc - out < 0) Ui.p.pomegranate else Ui.p.mint)
                 } else {

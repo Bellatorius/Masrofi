@@ -334,6 +334,9 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
 
     fun salary(): Double = setting("salary", "0").toDoubleOrNull() ?: 0.0
 
+    /** The user has no salary: months run on a fixed day and salary is hidden everywhere. */
+    fun noSalary(): Boolean = setting("no_salary", "0") == "1"
+
     // ---------- accounts ----------
 
     fun accounts(): List<Account> =

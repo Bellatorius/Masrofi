@@ -64,7 +64,7 @@ object Processor {
             db.reconcileDirections()
             val t = db.txn(id) ?: return id
             when {
-                t.income && t.kind == "راتب" -> Notifier.info(ctx, id, tr("وصل الراتب: ${fmt(t.amount)}", "Salary arrived: ${fmt(t.amount)}"),
+                t.income && t.kind == "راتب" && !db.noSalary() -> Notifier.info(ctx, id, tr("وصل الراتب: ${fmt(t.amount)}", "Salary arrived: ${fmt(t.amount)}"),
                     tr("بدأ شهر جديد في الميزانية", "A new budget month has started") +
                         (t.balance?.let { tr(" — رصيدك ${fmt(it)}", " — balance ${fmt(it)}") } ?: ""))
                 t.income -> Notifier.info(ctx, id, tr("وصلك ${fmt(t.amount)} (${t.kindText})", "You received ${fmt(t.amount)} (${t.kindText})"),

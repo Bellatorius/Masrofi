@@ -74,6 +74,7 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
     var importTo by remember { mutableStateOf(Period.day().from) }
     var pickingRange by remember { mutableStateOf(false) }
     var bySalary by remember { mutableStateOf(db.setting("cycle_mode", "salary") == "salary") }
+    var noSalary by remember { mutableStateOf(db.noSalary()) }
     var confirmReset by remember { mutableIntStateOf(0) } // 0 none, 1 transactions, 2 everything
     var dailySummary by remember { mutableStateOf(db.setting("daily_summary", "1") == "1") }
     var lockOn by remember { mutableStateOf(db.setting("lock", "0") == "1") }
@@ -203,11 +204,12 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     }
                 }
                 Text(
-                    tr("مجموع الميزانية ${fmt(total)}، والراتب المتوقع ${fmt(db.salary())}",
+                    if (noSalary) tr("مجموع الميزانية ${fmt(total)}", "Budget total ${fmt(total)}")
+                    else tr("مجموع الميزانية ${fmt(total)}، والراتب المتوقع ${fmt(db.salary())}",
                         "Budget total ${fmt(total)}, expected salary ${fmt(db.salary())}") +
                         if (db.salary() - total != 0.0) tr(" (الفرق ${fmt(db.salary() - total)})", " (difference ${fmt(db.salary() - total)})") else "",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (total > db.salary()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (!noSalary && total > db.salary()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = { addingCat = true }) { Text(tr("إضافة بند", "Add line")) }
@@ -251,6 +253,18 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
         }
         item {
             Section(tr("عام", "General")) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("ليس لدي راتب", "I don't have a salary"))
+                        Text(tr("يبدأ الشهر في يوم ثابت، ولا يظهر الراتب في التطبيق", "The month starts on a fixed day and salary is hidden"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = noSalary, onCheckedChange = {
+                        noSalary = it; db.setSetting("no_salary", if (it) "1" else "0"); refresh()
+                    })
+                }
+                Spacer(Modifier.height(8.dp))
+                if (!noSalary) {
                 OutlinedTextField(
                     value = salary, onValueChange = { salary = it }, label = { Text(tr("الراتب المتوقع (للتخطيط فقط)", "Expected salary (for planning only)")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -267,14 +281,15 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                     FilterChip(!bySalary, { bySalary = false; db.setSetting("cycle_mode", "day"); refresh() },
                         { Text(tr("في يوم ثابت", "On a fixed day")) })
                 }
-                if (!bySalary) {
+                }
+                if (!bySalary || noSalary) {
                     OutlinedTextField(
                         value = cycleDay, onValueChange = { cycleDay = it },
                         label = { Text(tr("يوم بداية الشهر (1-28)", "Start day of the month (1-28)")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
-                } else {
+                } else if (!noSalary) {
                     Text(tr("عند وصول رسالة الراتب يبدأ شهر جديد تلقائياً. وقبل أول راتب يُستخدم اليوم ${db.cycleDay()} من الشهر.",
                         "A new month starts by itself when the salary SMS arrives. Before the first salary, day ${db.cycleDay()} of the month is used."),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -78,7 +78,7 @@ object Daily {
             val total = spent.values.sum()
             val tip = monthTip(cats, spent, prevSpent, current = false) ?: ""
             Notifier.alert(ctx, 900_002, tr("تقرير الشهر جاهز 📊", "Your month report is ready 📊"),
-                (if (ci.received) tr("صرفت ${fmt(total)} من راتب ${fmt(ci.salary)}. ", "You spent ${fmt(total)} of a ${fmt(ci.salary)} salary. ")
+                (if (ci.received && !db.noSalary()) tr("صرفت ${fmt(total)} من راتب ${fmt(ci.salary)}. ", "You spent ${fmt(total)} of a ${fmt(ci.salary)} salary. ")
                 else tr("صرفت ${fmt(total)} هذا الشهر. ", "You spent ${fmt(total)} this month. ")) + tip)
         }
     }

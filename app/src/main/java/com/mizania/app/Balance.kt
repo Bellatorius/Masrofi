@@ -153,11 +153,12 @@ fun BalanceSheet(db: Db, onDone: () -> Unit) {
                 HorizontalDivider(Modifier.padding(vertical = 6.dp), color = Ui.p.line)
                 KV(tr("يمكنك صرف", "You can spend"), fmt(now.spendable ?: 0.0), bold = true,
                     color = if ((now.spendable ?: 0.0) < 0) Ui.p.pomegranate else Ui.p.mint)
-                KV(tr("÷ الأيام حتى الراتب", "÷ Days until salary"), "${now.daysLeft}")
+                KV(if (db.noSalary()) tr("÷ الأيام المتبقية من الشهر", "÷ Days left in the month") else tr("÷ الأيام حتى الراتب", "÷ Days until salary"), "${now.daysLeft}")
                 KV(tr("= المتاح لك يومياً", "= Per day"), fmt(now.allowance), bold = true)
             }
-            Text(tr("تُزال الفاتورة من المبلغ المحجوز تلقائياً عند تصنيف دفعتها على بندها، أو عند تعليمها هنا. وعند وصول الراتب يبدأ الحساب من جديد.",
-                "A bill leaves the set-aside amount by itself once you book its payment under its line, or tick it here. When salary arrives, it all starts again."),
+            Text(tr("تُزال الفاتورة من المبلغ المحجوز تلقائياً عند تصنيف دفعتها على بندها، أو عند تعليمها هنا.",
+                "A bill leaves the set-aside amount by itself once you book its payment under its line, or tick it here.") +
+                if (db.noSalary()) "" else tr(" وعند وصول الراتب يبدأ الحساب من جديد.", " When salary arrives, it all starts again."),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp))
         }
