@@ -109,9 +109,19 @@ class MainActivity : ComponentActivity() {
         Db.get(this).reconcileDirections()
         readIntent(intent)
         Bus.listener = { tick.intValue++ }
+        val dark = Look.isDark(this)
+        val bigText = Look.bigText(this)
+        // System bars in the page color, with dark icons on the light theme.
+        val bar = if (dark) 0xFF0B0B14.toInt() else 0xFFF6F5FB.toInt()
+        @Suppress("DEPRECATION")
+        run { window.statusBarColor = bar; window.navigationBarColor = bar }
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
         setContent {
             CompositionLocalProvider(LocalLayoutDirection provides if (Lang.ar) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-                MizaniaTheme {
+                MizaniaTheme(dark = dark, bigText = bigText) {
                   androidx.compose.material3.Surface(
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
@@ -234,6 +244,7 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
     val missingPerms = perms.any { ctx.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
 
     var triage by rememberSaveable { mutableStateOf(false) }
+    var onboarding by remember { mutableStateOf(Setup.needed(db)) }
     val titles = listOf(tr("ميزانيتي", "My Budget"), tr("الحركات", "Transactions"), tr("التقارير", "Reports"),
         tr("أموالي", "My money"), tr("الإعدادات", "Settings"))
     // Back from settings goes home instead of leaving the app.
@@ -296,6 +307,11 @@ fun App(tick: Int, refresh: () -> Unit, openTxn: Long?, setOpenTxn: (Long?) -> U
             exit = slideOutVertically(tween(260)) { it } + fadeOut(),
         ) {
             TriageScreen(db, onOpenDetails = setOpenTxn, onClose = { triage = false; refresh() })
+        }
+
+        if (onboarding) {
+            OnboardingScreen(db, missingPerms, onAskPerms = { launcher.launch(perms) },
+                onDone = { onboarding = false; tab = 0; refresh() })
         }
     }
 

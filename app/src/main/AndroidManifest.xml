@@ -51,6 +51,18 @@
         </receiver>
 
         <receiver
+            android:name=".AllowanceWidgetLarge"
+            android:exported="false"
+            android:label="@string/widget_large_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_large_info" />
+        </receiver>
+
+        <receiver
             android:name=".DailyReceiver"
             android:exported="false" />
 

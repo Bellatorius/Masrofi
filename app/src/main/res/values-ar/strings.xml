@@ -3,4 +3,5 @@
     <string name="app_name">ميزانيتي</string>
     <string name="widget_title">المتاح لك اليوم</string>
     <string name="widget_desc">المبلغ المتاح لك للصرف اليوم</string>
+    <string name="widget_large_desc">المتاح اليوم وأهم بنودك</string>
 </resources>

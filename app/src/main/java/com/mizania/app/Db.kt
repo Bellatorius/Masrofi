@@ -470,6 +470,11 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "mizania.db",
 
     fun txn(id: Long): Txn? = queryTxns("id=?", arrayOf(id.toString())).firstOrNull()
 
+    /** When the first counted transaction happened, or null when there is none. */
+    fun firstTxnTime(): Long? =
+        readableDatabase.rawQuery("SELECT MIN(time) FROM txns WHERE ignored=0", null)
+            .use { if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null }
+
     fun txns(from: Long, to: Long): List<Txn> = queryTxns("time>=? AND time<?", arrayOf(from.toString(), to.toString()))
 
     /** Spending under one budget line in [from, to), newest first. [catId] null = no budget line yet. */

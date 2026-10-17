@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -43,13 +44,17 @@ data class Palette(
     val raised: Color,
     val heroStart: Color,
     val heroEnd: Color,
+    /** Top and bottom of the faint sheen on cards. */
+    val sheenTop: Color = Color(0x14FFFFFF),
+    val sheenBottom: Color = Color(0x08FFFFFF),
+    val dark: Boolean = true,
 )
 
 /** The violet → blue gradient behind hero cards. */
 val Palette.hero: Brush get() = Brush.linearGradient(listOf(heroStart, heroEnd))
 
 /** Glassy card fill: a faint white sheen fading downwards. */
-val Palette.glass: Brush get() = Brush.verticalGradient(listOf(Color(0x14FFFFFF), Color(0x08FFFFFF)))
+val Palette.glass: Brush get() = Brush.verticalGradient(listOf(sheenTop, sheenBottom))
 
 val NightPalette = Palette(
     stone = Color(0xFF0B0B14), pine = Color(0xFF7C5CFF), onPine = Color(0xFFFFFFFF),
@@ -57,6 +62,27 @@ val NightPalette = Palette(
     muted = Color(0xFF9C9AB8), line = Color(0x1FFFFFFF), raised = Color(0xFF15141F),
     heroStart = Color(0xFF7C5CFF), heroEnd = Color(0xFF3B82F6),
 )
+
+/** "Day": the same violet accents on a soft white page. */
+val DayPalette = Palette(
+    stone = Color(0xFFF6F5FB), pine = Color(0xFF6A4DF5), onPine = Color(0xFFFFFFFF),
+    dinar = Color(0xFF8B74FF), mint = Color(0xFF0E9F6E), pomegranate = Color(0xFFE0445F),
+    muted = Color(0xFF6B6880), line = Color(0x1F000000), raised = Color(0xFFFFFFFF),
+    heroStart = Color(0xFF7C5CFF), heroEnd = Color(0xFF3B82F6),
+    sheenTop = Color(0x00FFFFFF), sheenBottom = Color(0x00FFFFFF), dark = false,
+)
+
+/** Look settings: theme ("" = follow the phone, "dark", "light") and bigger text. */
+object Look {
+    fun theme(ctx: Context): String = Db.get(ctx).setting("theme", "dark")
+    fun bigText(ctx: Context): Boolean = Db.get(ctx).setting("big_text", "0") == "1"
+    fun isDark(ctx: Context): Boolean = when (theme(ctx)) {
+        "light" -> false
+        "dark" -> true
+        else -> (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+}
 
 val LocalPalette = staticCompositionLocalOf { NightPalette }
 
@@ -77,8 +103,8 @@ private fun assetFamily(ctx: Context, vararg files: Pair<String, FontWeight>): F
 }
 
 @Composable
-fun MizaniaTheme(content: @Composable () -> Unit) {
-    val p = NightPalette
+fun MizaniaTheme(dark: Boolean = true, bigText: Boolean = false, content: @Composable () -> Unit) {
+    val p = if (dark) NightPalette else DayPalette
     val ctx = LocalContext.current
 
     val text = remember {
@@ -100,7 +126,21 @@ fun MizaniaTheme(content: @Composable () -> Unit) {
         ) ?: text
     }
 
-    val scheme = darkColorScheme(
+    val scheme = if (!dark) lightColorScheme(
+        primary = p.pine, onPrimary = Color.White,
+        primaryContainer = Color(0xFFE6E0FF), onPrimaryContainer = Color(0xFF22125E),
+        secondary = p.mint, onSecondary = Color.White,
+        secondaryContainer = Color(0xFFD3F5E6), onSecondaryContainer = Color(0xFF00382A),
+        tertiary = Color(0xFF2563EB), tertiaryContainer = Color(0xFFDBE7FF), onTertiaryContainer = Color(0xFF0B2A66),
+        error = p.pomegranate, onError = Color.White, errorContainer = Color(0xFFFFDDE3), onErrorContainer = Color(0xFF5C0E1E),
+        background = p.stone, onBackground = Color(0xFF1A1830), surface = p.stone, onSurface = Color(0xFF1A1830),
+        surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFFFFFF), surfaceContainer = Color(0xFFEFEDF7),
+        surfaceContainerHigh = Color(0xFFE9E7F2), surfaceContainerHighest = Color(0xFFE2E0EC),
+        surfaceVariant = Color(0xFFE7E5F0), surfaceTint = p.pine,
+        onSurfaceVariant = p.muted, outline = Color(0xFFB4B1C8), outlineVariant = Color(0xFFDAD8E6),
+        inverseSurface = Color(0xFF2A2840), inverseOnSurface = Color(0xFFF1F0FA), inversePrimary = Color(0xFFB9A6FF),
+        scrim = Color.Black,
+    ) else darkColorScheme(
         primary = p.pine, onPrimary = Color.White,
         primaryContainer = Color(0xFF2A2350), onPrimaryContainer = Color(0xFFE4DCFF),
         secondary = p.mint, onSecondary = Color(0xFF00281A),
@@ -136,7 +176,13 @@ fun MizaniaTheme(content: @Composable () -> Unit) {
         labelSmall = t.labelSmall.f(),
     )
 
-    CompositionLocalProvider(LocalPalette provides p, LocalNumbers provides numbers) {
+    // Bigger text: scale every sp size on top of the phone's own font size.
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val density = if (bigText) androidx.compose.ui.unit.Density(d.density, d.fontScale * 1.18f) else d
+    CompositionLocalProvider(
+        LocalPalette provides p, LocalNumbers provides numbers,
+        androidx.compose.ui.platform.LocalDensity provides density,
+    ) {
         MaterialTheme(colorScheme = scheme, typography = typography, content = content)
     }
 }

@@ -408,11 +408,13 @@ fun HomeScreen(
     var catSheet by remember { mutableStateOf<Long?>(null) }
     var showMath by remember { mutableStateOf(false) }
     var allLines by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
+    val streak = remember(tick) { Streak.current(db) }
+    val ctx = LocalContext.current
     val noSalary = remember(tick) { db.noSalary() }
 
     val steps = listOf(
-        SetupStep("📩", tr("اسمح بقراءة الرسائل", "Allow reading SMS"), !missingPerms, onAskPerms,
-            tr("لا يعمل الزر؟ إعدادات التطبيق ← ⋮ ← السماح بالإعدادات المقيدة", "Button does nothing? App settings → ⋮ → Allow restricted settings")),
+        SetupStep("📩", tr("اسمح بقراءة الرسائل", "Allow reading SMS"), !missingPerms, onAskPerms, onHelp = { showHelp = true }),
         SetupStep("🏦", tr("اختر رسائل بنكك", "Pick your bank's messages"), senders.isNotEmpty(), onGoSettings),
         SetupStep("🎯", tr("حدّد ميزانيتك الشهرية", "Set your monthly budget"), cats.any { it.budget > 0 }, onGoSettings),
     )
@@ -508,6 +510,17 @@ fun HomeScreen(
                 )
             }
         }
+        if (streak >= 2) item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(16.dp))
+                    .background(p.dinar.copy(alpha = 0.14f)).padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("🔥", fontSize = 22.sp)
+                Text(tr("${daysText(streak)} متتالية ضمن حدك اليومي", "${daysText(streak)} in a row within your daily limit"),
+                    Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            }
+        }
         if (pending.isNotEmpty()) item {
             TriageCard(pending, cats, onTriage)
         }
@@ -531,7 +544,9 @@ fun HomeScreen(
             }
         }
         item {
-            Section(tr("الشهر", "This month")) {
+            Section(tr("الشهر", "This month"), action = {
+                TextButton(onClick = { MonthCard.share(ctx, db) }) { Text(tr("مشاركة 📤", "Share 📤")) }
+            }) {
                 val otherIn = remember(tick) { db.otherIncome(cycle.from, cycle.to) }
                 val startBal = remember(tick) { db.totalBalanceAt(cycle.from) }
                 val income = ci.salary + otherIn
@@ -590,6 +605,7 @@ fun HomeScreen(
     }
 
     if (showBalance) BalanceSheet(db) { showBalance = false; refresh() }
+    if (showHelp) PermissionHelpSheet { showHelp = false; refresh() }
     catSheet?.let { id ->
         CategorySheet(db, cats.firstOrNull { it.id == id }, cycle, tr("هذا الشهر", "This month"),
             onOpen = { tid -> catSheet = null; onOpen(tid) }, onDone = { catSheet = null }, onChanged = refresh)
@@ -597,7 +613,7 @@ fun HomeScreen(
 }
 
 /** One thing to do before the app can help: [hint] shows under it while it is not done. */
-data class SetupStep(val icon: String, val title: String, val done: Boolean, val onClick: () -> Unit, val hint: String = "")
+data class SetupStep(val icon: String, val title: String, val done: Boolean, val onClick: () -> Unit, val onHelp: (() -> Unit)? = null)
 
 /** "Get started": the setup steps as a short checklist; the next one to do is highlighted. */
 @Composable
@@ -639,8 +655,10 @@ fun SetupCard(steps: List<SetupStep>) {
                     Text(s.title, style = MaterialTheme.typography.bodyLarge,
                         fontWeight = if (isNext) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-                    if (isNext && s.hint.isNotEmpty()) {
-                        Text(s.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (isNext && s.onHelp != null) {
+                        Text(tr("لا يعمل؟ اضغط لترى الطريقة", "Not working? Tap to see how"),
+                            style = MaterialTheme.typography.bodySmall, color = p.pine,
+                            modifier = Modifier.clickable(onClick = s.onHelp).padding(top = 2.dp))
                     }
                 }
                 if (!s.done) Icon(
@@ -877,7 +895,12 @@ fun ReportsScreen(db: Db, tick: Int, onOpen: (Long) -> Unit, refresh: () -> Unit
             }
         }
         item {
-            Section(tr("الملخص", "Summary")) {
+            val rctx = LocalContext.current
+            Section(tr("الملخص", "Summary"), action = {
+                if (mode == Period.MODE_MONTH) {
+                    TextButton(onClick = { MonthCard.share(rctx, db, offset) }) { Text(tr("مشاركة 📤", "Share 📤")) }
+                }
+            }) {
                 if (inc > 0) KV(tr("إجمالي الدخل", "Total income"), "+" + fmt(inc), color = Ui.p.mint)
                 if (monthInfo != null) {
                     if (!db.noSalary()) KV(tr("الراتب", "Salary"), if (monthInfo.received) fmt(monthInfo.salary) else tr("لم يصل في هذه الفترة", "Not in this period"))

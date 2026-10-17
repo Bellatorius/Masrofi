@@ -80,6 +80,9 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
     var lockOn by remember { mutableStateOf(db.setting("lock", "0") == "1") }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
     var langChoice by remember { mutableStateOf(Lang.choice(ctx)) }
+    var themeChoice by remember { mutableStateOf(Look.theme(ctx)) }
+    var bigText by remember { mutableStateOf(Look.bigText(ctx)) }
+    var showHelp by remember { mutableStateOf(false) }
 
     fun toast(msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
 
@@ -118,6 +121,37 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
                             }
                         }, { Text(name) })
                     }
+                }
+            }
+        }
+        item {
+            Section(tr("المظهر", "Look")) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "dark" to tr("🌙 داكن", "🌙 Dark"),
+                        "light" to tr("☀️ فاتح", "☀️ Light"),
+                        "" to tr("مثل الهاتف", "Like the phone"),
+                    ).forEach { (code, name) ->
+                        FilterChip(themeChoice == code, {
+                            if (themeChoice != code) {
+                                themeChoice = code
+                                db.setSetting("theme", code)
+                                (ctx as? android.app.Activity)?.recreate()
+                            }
+                        }, { Text(name) })
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("خط أكبر", "Bigger text"))
+                        Text(tr("يكبّر كل النصوص في التطبيق", "Makes all text in the app larger"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = bigText, onCheckedChange = {
+                        bigText = it
+                        db.setSetting("big_text", if (it) "1" else "0")
+                        (ctx as? android.app.Activity)?.recreate()
+                    })
                 }
             }
         }
@@ -338,6 +372,21 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
             }
         }
         item {
+            Section(tr("مساعدة", "Help")) {
+                OutlinedButton(onClick = { showHelp = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(tr("صلاحية الرسائل والتثبيت", "SMS access & installing"))
+                }
+                OutlinedButton(onClick = {
+                    db.setSetting("onboarded", "0")
+                    // Setup only shows for a fresh start; this asks again even when data exists.
+                    db.setSetting("onboarding_again", "1")
+                    (ctx as? android.app.Activity)?.recreate()
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text(tr("إعادة أسئلة البداية", "Run the setup questions again"))
+                }
+            }
+        }
+        item {
             Section(tr("نسخة احتياطية", "Backup")) {
                 Text(tr("احفظ كل بياناتك في ملف، ويمكنك استرجاعها على الهاتف نفسه أو على هاتف جديد.",
                     "Save all your data to a file; you can restore it on this phone or a new one."),
@@ -365,6 +414,7 @@ fun SettingsScreen(db: Db, tick: Int, refresh: () -> Unit) {
         }
     }
 
+    if (showHelp) PermissionHelpSheet { showHelp = false }
     editingRule?.let { r -> RuleDialog(db, r) { editingRule = null; refresh() } }
     if (addingRule) RuleDialog(db, null) { addingRule = false; refresh() }
     if (pickingRange) {
